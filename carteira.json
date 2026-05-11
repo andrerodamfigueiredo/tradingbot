@@ -1,0 +1,9 @@
+{
+  "saldo": 10000.0,
+  "posicao_aberta": null,
+  "historico": [],
+  "total_operacoes": 0,
+  "operacoes_ganhas": 0,
+  "operacoes_perdidas": 0,
+  "lucro_total": 0.0
+}

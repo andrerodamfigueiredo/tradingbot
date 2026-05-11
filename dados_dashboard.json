@@ -1,0 +1,87 @@
+{
+  "carteira": {
+    "saldo": 10000.0,
+    "rentabilidade": 0.0,
+    "total_operacoes": 0,
+    "operacoes_ganhas": 0,
+    "operacoes_perdidas": 0,
+    "lucro_total": 0.0,
+    "win_rate": 0,
+    "historico": []
+  },
+  "analises": [
+    {
+      "hora": "2026-05-04 18:55",
+      "preco": 4536.2,
+      "rsi": 17.2,
+      "decisao": "AGUARDAR",
+      "confianca": 32,
+      "risco": "ALTO",
+      "raciocinio": "RSI em 17.2 indica sobrevenda extrema, mas MACD ainda em zona negativa sem cruzamento confirmado. Preço abaixo das médias móveis (MM20 e MM50) com queda de 2.26% nas últimas 24h sugere momentum ainda bearish. Notícias sobre política monetária e conflitos geopolíticos aumentam volatilidade e incerteza. Aguardar consolidação ou sinal mais claro de reversão antes de entrada com confiança acima de 75%."
+    },
+    {
+      "hora": "2026-05-04 19:00",
+      "preco": 4532.8,
+      "rsi": 15.1,
+      "decisao": "AGUARDAR",
+      "confianca": 35,
+      "risco": "ALTO",
+      "raciocinio": "RSI extremamente baixo em 15.1 indica sobrevenda, mas preço está abaixo das principais médias móveis (MM20 e MM50), sinalizando tendência de baixa ainda ativa. MACD negativo e afastado confirma momentum vendedor. Notícias geopolíticas criam incerteza sobre direção futura do ouro. Necessário aguardar confirmação de reversão antes de operação conservadora."
+    },
+    {
+      "hora": "2026-05-04 19:05",
+      "preco": 4533.1,
+      "rsi": 15.3,
+      "decisao": "AGUARDAR",
+      "confianca": 35,
+      "risco": "ALTO",
+      "raciocinio": "RSI extremamente baixo (15.3) indica sobrevenda, mas preço abaixo das médias móveis (MM20 e MM50) com MACD negativo sugere momentum descendente ainda ativo. Notícias geopolíticas sobre Iran e Fed criam incerteza quanto à direção. Falta confirmação de reversão com volume ou padrão de reteste para entrada conservadora acima de 75%."
+    },
+    {
+      "hora": "2026-05-05 21:20",
+      "preco": 4529.1,
+      "rsi": 24.7,
+      "decisao": "AGUARDAR",
+      "confianca": 35,
+      "risco": "ALTO",
+      "raciocinio": "RSI em 24.7 indica sobrevenda extrema, mas price action está abaixo das três médias móveis (MM20, MM50), sinalizando tendência de baixa forte. MACD negativo e divergindo não confirma reversão. Embora tensões geopolíticas (Iran) sustentem ouro, o contexto técnico é demasiado fraco para entrada conservadora acima de 75%. Aguardar consolidação ou sinais de reversão mais fortes nas próximas horas."
+    },
+    {
+      "hora": "2026-05-05 21:26",
+      "preco": 4567.9,
+      "rsi": 55.2,
+      "decisao": "AGUARDAR",
+      "confianca": 42,
+      "risco": "—",
+      "raciocinio": "Preço oscilando entre MM20 e MM50 sem direção clara. RSI em zona neutra (55.2) sem divergências significativas. MACD positivo mas signal fraco não confirma força de compra. Notícias não apresentam catalisadores diretos para ouro. Confiança insuficiente para entrada conservadora."
+    },
+    {
+      "hora": "2026-05-05 21:44",
+      "preco": 4569.2,
+      "rsi": 55.8,
+      "decisao": "AGUARDAR",
+      "confianca": 42,
+      "risco": "MEDIO",
+      "raciocinio": "Preco entre MM20 e MM50 sem direcao clara. RSI neutro em 55.8 sem momentum decisivo. MACD positivo mas Stochastic em zona baixa (40.4) sugere falta de confirmacao. Volume muito reduzido (0.14x) invalida sinais tecnicos. Confianca abaixo do minimo de 75% exigido."
+    },
+    {
+      "hora": "2026-05-05 21:45",
+      "preco": 4568.1,
+      "rsi": 55.3,
+      "decisao": "AGUARDAR",
+      "confianca": 45,
+      "risco": "MEDIO",
+      "raciocinio": "Preço abaixo de todas as médias móveis principais com RSI neutro em 55.3, indicando falta de direção clara. Volume extremamente baixo (0.15x) desqualifica qualquer sinal técnico nesta sessão. MACD positivo mas Stochastic fraco em 38.1 não oferece confluência suficiente. Cenário não atende ao critério mínimo de confiança de 75% para operação conservadora."
+    },
+    {
+      "hora": "2026-05-07 01:58",
+      "preco": 4698.7,
+      "rsi": 43.6,
+      "decisao": "AGUARDAR",
+      "confianca": 35,
+      "risco": "MEDIO",
+      "raciocinio": "Preço muito próximo da MM20, indicadores mistos com RSI em zona neutra (43.6), MACD negativo e Stochastic em transição. Volume extremamente baixo (0.31x) na sessão asiática enfraquece qualquer sinal. Faltam confirmações robustas para entrada com confiança acima de 75%. Melhor aguardar fechamento de vela clara ou quebra de estrutura com volume superior."
+    }
+  ],
+  "posicao_aberta": null
+}

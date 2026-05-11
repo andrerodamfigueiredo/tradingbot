@@ -1,0 +1,36 @@
+[
+  {
+    "hora": "2026-05-03 21:30",
+    "preco": 4644.5,
+    "rsi": 61.29428629940611,
+    "decisao": "AGUARDAR",
+    "confianca": 45,
+    "risco": "MEDIO",
+    "stop_loss": null,
+    "take_profit": null,
+    "raciocinio": "Preço acima das médias móveis com RSI em 61.3 (zona neutra-alta), mas MACD ainda não confirmou cruzamento bullish claro. Notícias geopolíticas (Iran war) criam volatilidade, aumentando incerteza. Prefiro aguardar confirmação mais forte antes de entrar, respeitando meu critério de confiança acima de 75%. A zona atual não oferece relação risco/reward clara de 1:2 com segurança.",
+    "zona": "Monitorar suporte em 4619.48 (MM20) e resistência em 4671.30 (Bollinger superior). Entrada com confiança apenas se houver rompimento decisivo com volume.",
+    "noticias": [
+      "Bitcoin As Hedge: Taiwan Lawmaker Takes Reserve Proposal To The Top",
+      "36k-Mile 2004 Porsche Cayenne",
+      "The Only Star Wars Merch Worth Putting in Your Pocket"
+    ]
+  },
+  {
+    "hora": "2026-05-04 18:19",
+    "preco": 4532.89990234375,
+    "rsi": 15.186948531387358,
+    "decisao": "AGUARDAR",
+    "confianca": 25,
+    "risco": "ALTO",
+    "stop_loss": null,
+    "take_profit": null,
+    "raciocinio": "RSI extremamente baixo (15.2) indica sobrevenda, mas MACD muito negativo (-21.38) com histograma em deterioração sugere momentum descendente ainda forte. Preço abaixo de todas as médias móveis principais (20, 50) e notícias geopolíticas criam volatilidade impredizível. Faltam sinais de confirmação de reversão para confiar acima de 75% em entrada longa.",
+    "zona": "Monitorar suporte em 4522.65 (Bollinger inferior) e aguardar sinais de divergência positiva no MACD ou RSI acima de 30 antes de agir",
+    "noticias": [
+      "How the US Pulled Off an Armed Robbery of the World’s Energy Supply and Created the Petrogas Dollar. “Chaos is the Objective”",
+      "SNX: The Return Of The Jordan 1 Banned, And This Week’s Best Sneakers",
+      "Iran says US military operation ‘impossible’ as Trump mulls peace proposal"
+    ]
+  }
+]

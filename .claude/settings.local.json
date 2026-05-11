@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(launchctl unload *)",
+      "Bash(launchctl load *)",
+      "Bash(launchctl list *)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\(os.path.expanduser\\('~/trading-robot/carteira.json'\\)\\)\\); print\\('JSON valido'\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)\\)\")",
+      "Bash(python3 -c \"import json,os; d=json.load\\(open\\(os.path.expanduser\\('~/trading-robot/carteira.json'\\)\\)\\); print\\('JSON valido'\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)\\)\")",
+      "Bash(python3 analise_agendada.py)"
+    ]
+  }
+}
