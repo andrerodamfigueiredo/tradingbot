@@ -210,8 +210,8 @@ tbody tr:hover td { background:#151515; }
           <th>Preço</th>
           <th>RSI</th>
           <th>Decisão</th>
-          <th>Confiança</th>
-          <th>Risco</th>
+          <th>Score</th>
+          <th>Sentimento</th>
           <th>Raciocínio</th>
         </tr>
       </thead>
@@ -243,7 +243,7 @@ tbody tr:hover td { background:#151515; }
   </div>
 
   <div class="statusbar">
-    <span><span id="fetch-status">● LIVE</span>&nbsp;·&nbsp; Auto-refresh: 60s &nbsp;·&nbsp; Threshold: 65%</span>
+    <span><span id="fetch-status">● LIVE</span>&nbsp;·&nbsp; Auto-refresh: 60s &nbsp;·&nbsp; Ciclo: 30min &nbsp;·&nbsp; Threshold: 58%</span>
     <span>Última actualização: <span id="ultima-atualizacao">—</span></span>
     <span>6 mercados · dados_dashboard.json</span>
   </div>
@@ -311,18 +311,21 @@ function renderCarteira(c) {
   document.getElementById('ganhas-perdidas').textContent = ganhas + ' ganhas · ' + perdidas + ' perdidas';
   document.getElementById('total-ops').textContent = total;
 
-  // Posição aberta
-  const pos = c.posicao_aberta;
+  // Posição aberta (mostra primeira; suporta posicoes_abertas plural)
+  const posicoes = c.posicoes_abertas?.length ? c.posicoes_abertas : (c.posicao_aberta ? [c.posicao_aberta] : []);
+  const pos = posicoes[0] || null;
   const posSection = document.getElementById('posicao-section');
   if (pos) {
     posSection.style.display = 'block';
-    document.getElementById('pos-activo').textContent = pos.activo || '—';
-    document.getElementById('pos-tipo').textContent   = pos.tipo || '—';
-    document.getElementById('pos-tipo').style.color   = pos.tipo === 'COMPRAR' ? 'var(--green)' : 'var(--red)';
-    document.getElementById('pos-entrada').textContent = pos.preco_entrada?.toFixed(2) || '—';
-    document.getElementById('pos-sl').textContent      = pos.stop_loss?.toFixed(2)    || '—';
-    document.getElementById('pos-tp').textContent      = pos.take_profit?.toFixed(2)  || '—';
-    document.getElementById('pos-status').textContent  = (pos.activo || '') + ' ' + (pos.tipo || '') + ' aberta';
+    const n = posicoes.length;
+    document.getElementById('pos-activo').textContent  = pos.activo || '—';
+    document.getElementById('pos-tipo').textContent    = pos.tipo || '—';
+    document.getElementById('pos-tipo').style.color    = pos.tipo === 'COMPRAR' ? 'var(--green)' : 'var(--red)';
+    const fmt = v => typeof v === 'number' ? (v > 1000 ? v.toLocaleString('pt-PT',{minimumFractionDigits:2}) : v.toFixed(4)) : '—';
+    document.getElementById('pos-entrada').textContent = fmt(pos.preco_entrada);
+    document.getElementById('pos-sl').textContent      = fmt(pos.stop_loss);
+    document.getElementById('pos-tp').textContent      = fmt(pos.take_profit);
+    document.getElementById('pos-status').textContent  = `${n} posição${n>1?'es':''} abertas`;
   } else {
     posSection.style.display = 'none';
     document.getElementById('pos-status').textContent = 'Sem posição aberta';
@@ -366,15 +369,19 @@ function renderSumario(analises) {
         <div class="ac-preco" style="color:var(--muted)">—</div>
         <div class="ac-row"><span style="color:var(--muted);font-size:10px">Sem dados</span></div>
       </div>`;
-    const cls  = a.decisao === 'COMPRAR' ? 'comprar' : a.decisao === 'VENDER' ? 'vender' : 'aguardar';
-    const confCor = a.confianca >= 65 ? 'var(--green)' : a.confianca >= 50 ? 'var(--gold)' : 'var(--red)';
+    const cls      = a.decisao === 'COMPRAR' ? 'comprar' : a.decisao === 'VENDER' ? 'vender' : 'aguardar';
+    const scoreVal = a.score ?? a.confianca ?? 0;
+    const scoreCor = scoreVal >= 58 ? 'var(--green)' : scoreVal >= 45 ? 'var(--gold)' : 'var(--red)';
+    const precoFmt = typeof a.preco === 'number'
+      ? (a.preco > 1000 ? a.preco.toLocaleString('pt-PT',{minimumFractionDigits:2}) : a.preco.toFixed(4))
+      : '—';
     return `
       <div class="activo-card" style="border-color:${cor}22" onclick="filtrar('${nome}')">
         <div class="ac-nome" style="color:${cor}">${nome} <span style="color:var(--muted);font-size:9px">${a.simbolo||''}</span></div>
-        <div class="ac-preco" style="color:${cor}">$${typeof a.preco==='number'?a.preco.toLocaleString('pt-PT',{minimumFractionDigits:2}):'—'}</div>
+        <div class="ac-preco" style="color:${cor}">$${precoFmt}</div>
         <div class="ac-row">
           <span class="ac-badge ${cls}">${a.decisao}</span>
-          <span class="ac-conf" style="color:${confCor}">${a.confianca}%</span>
+          <span class="ac-conf" style="color:${scoreCor}">Score ${scoreVal}%</span>
           <span style="color:var(--muted);font-size:10px">RSI ${a.rsi||'—'}</span>
         </div>
       </div>`;
@@ -402,18 +409,24 @@ function renderAnalises(analises) {
     const cls     = a.decisao === 'COMPRAR' ? 'comprar' : a.decisao === 'VENDER' ? 'vender' : 'aguardar';
     const rsiVal  = parseFloat(a.rsi);
     const rsiCor  = isNaN(rsiVal) ? '' : rsiVal < 30 ? 'color:var(--red)' : rsiVal > 70 ? 'color:var(--green)' : '';
-    const confCor = a.confianca >= 65 ? 'color:var(--green)' : a.confianca >= 50 ? 'color:var(--gold)' : 'color:var(--red)';
-    const cor     = ACTIVO_CORES[a.activo] || 'var(--gold)';
-    const rac     = a.raciocinio ? a.raciocinio.substring(0,200) + (a.raciocinio.length>200?'…':'') : '—';
+    const scoreVal = a.score ?? a.confianca ?? 0;
+    const scoreCor = scoreVal >= 58 ? 'color:var(--green)' : scoreVal >= 45 ? 'color:var(--gold)' : 'color:var(--red)';
+    const cor      = ACTIVO_CORES[a.activo] || 'var(--gold)';
+    const rac      = a.raciocinio ? a.raciocinio.substring(0,200) + (a.raciocinio.length>200?'…':'') : '—';
+    const sent     = a.sentimento_noticias || '—';
+    const sentCor  = sent === 'POSITIVO' ? 'color:var(--green)' : sent === 'NEGATIVO' ? 'color:var(--red)' : 'color:var(--muted)';
+    const precoFmt = typeof a.preco === 'number'
+      ? (a.preco > 1000 ? a.preco.toLocaleString('pt-PT',{minimumFractionDigits:2}) : a.preco.toFixed(4))
+      : a.preco;
     return `<tr>
       <td style="white-space:nowrap;color:var(--muted)">${a.hora}</td>
       <td style="color:${cor};white-space:nowrap;font-weight:bold">${a.activo||'—'}</td>
-      <td style="white-space:nowrap;color:${cor}">$${typeof a.preco==='number'?a.preco.toFixed(2):a.preco}</td>
+      <td style="white-space:nowrap;color:${cor}">$${precoFmt}</td>
       <td style="${rsiCor};white-space:nowrap">${isNaN(rsiVal)?'—':rsiVal.toFixed(1)}</td>
       <td><span class="badge ${cls}">${a.decisao}</span></td>
-      <td style="${confCor};font-weight:bold">${a.confianca}%</td>
-      <td style="color:var(--muted)">${a.risco}</td>
-      <td style="color:#666;max-width:320px;line-height:1.5">${rac}</td>
+      <td style="${scoreCor};font-weight:bold">${scoreVal}%</td>
+      <td style="${sentCor};font-size:10px">${sent}</td>
+      <td style="color:#666;max-width:300px;line-height:1.5">${rac}</td>
     </tr>`;
   }).join('');
 }
@@ -434,7 +447,7 @@ function renderGrafico(analises) {
     labels = [...horasSet].sort();
     datasets = nomes.map(nome => {
       const mapa = {};
-      analises.filter(a => a.activo === nome).forEach(a => { mapa[a.hora] = a.confianca; });
+      analises.filter(a => a.activo === nome).forEach(a => { mapa[a.hora] = a.score ?? a.confianca; });
       return {
         label:               nome,
         data:                labels.map(h => mapa[h] ?? null),
@@ -448,34 +461,34 @@ function renderGrafico(analises) {
         spanGaps:            true,
       };
     });
-    // Linha threshold 65%
+    // Linha threshold 58%
     datasets.push({
-      label: 'Threshold 65%',
-      data:  labels.map(() => 65),
+      label: 'Threshold 58%',
+      data:  labels.map(() => 58),
       borderColor: 'rgba(255,68,68,0.5)',
       borderWidth: 1, borderDash: [6,3], pointRadius: 0, fill: false,
     });
   } else {
     const filtradas = analises.filter(a => a.activo === activoFiltro);
     labels   = filtradas.map(a => a.hora);
-    const valores = filtradas.map(a => a.confianca);
+    const valores = filtradas.map(a => a.score ?? a.confianca);
     const cor     = ACTIVO_CORES[activoFiltro] || '#ffd700';
     datasets = [
       {
-        label: `${activoFiltro} — Confiança (%)`,
+        label: `${activoFiltro} — Score (%)`,
         data: valores,
         borderColor: cor,
         backgroundColor: cor + '12',
         borderWidth: 2,
-        pointBackgroundColor: valores.map(v => v >= 65 ? 'var(--green)' : '#ff4444'),
+        pointBackgroundColor: valores.map(v => v >= 58 ? 'var(--green)' : '#ff4444'),
         pointBorderColor: 'transparent',
         pointRadius: 6,
         tension: 0.35,
         fill: true,
       },
       {
-        label: 'Threshold 65%',
-        data:  labels.map(() => 65),
+        label: 'Threshold 58%',
+        data:  labels.map(() => 58),
         borderColor: 'rgba(255,68,68,0.6)',
         borderWidth: 1.5, borderDash: [8,4], pointRadius: 0, fill: false,
       },
