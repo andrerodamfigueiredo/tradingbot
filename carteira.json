@@ -1,9 +1,15 @@
 {
   "saldo": 10000.0,
-  "posicao_aberta": null,
+  "custos_totais": 0.0,
+  "posicoes_abertas": [],
   "historico": [],
-  "total_operacoes": 0,
-  "operacoes_ganhas": 0,
-  "operacoes_perdidas": 0,
-  "lucro_total": 0.0
+  "estatisticas": {
+    "total_operacoes": 0,
+    "ganhas": 0,
+    "perdidas": 0,
+    "win_rate": 0.0,
+    "lucro_liquido_total": 0.0,
+    "custos_totais": 0.0,
+    "rentabilidade": 0.0
+  }
 }

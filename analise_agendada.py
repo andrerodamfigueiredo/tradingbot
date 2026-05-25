@@ -210,6 +210,7 @@ def verificar_posicoes(carteira, precos):
         nome  = pos["activo"]
         preco = precos.get(nome)
         if preco is None:
+            print(f"  ⚠  [{nome}] preço indisponível — SL/TP não verificado, posição mantida")
             manter.append(pos)
             continue
         resultado   = None
