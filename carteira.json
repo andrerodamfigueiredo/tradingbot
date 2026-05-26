@@ -3,6 +3,7 @@
   "custos_totais": 0.0,
   "posicoes_abertas": [],
   "historico": [],
+  "cooldowns": {},
   "estatisticas": {
     "total_operacoes": 0,
     "ganhas": 0,

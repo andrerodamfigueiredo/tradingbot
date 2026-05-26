@@ -7,110 +7,127 @@ import time
 import threading
 import http.server
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 
 warnings.filterwarnings("ignore")
 
-BASE_DIR           = os.path.dirname(os.path.abspath(__file__))
-FICHEIRO_CARTEIRA  = os.path.join(BASE_DIR, "carteira.json")
-FICHEIRO_DASHBOARD = os.path.join(BASE_DIR, "dados_dashboard.json")
-SALDO_INICIAL      = 10000.0
-THRESHOLD_ENTRADA  = 58      # score >= 58 → entra
-THRESHOLD_MONITOR  = 45      # score >= 45 → monitoriza
-CUSTO_OP           = 0.001   # 0.1% por abertura/fecho
-SL_MULT            = 1.5     # stop = 1.5x ATR
-TP_MULT            = 3.0     # take profit = 3x ATR
-CAPITAL_POR_OP     = 0.02    # 2% saldo por operação
-MAX_POSICOES       = 2
-PORT               = int(os.environ.get("PORT", 8080))
-SEP                = "=" * 60
+# ─── CONFIGURAÇÃO ─────────────────────────────────────────────────────────────
+BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
+FICHEIRO_CARTEIRA = os.path.join(BASE_DIR, "carteira.json")
+FICHEIRO_DASHBOARD= os.path.join(BASE_DIR, "dados_dashboard.json")
+SALDO_INICIAL     = 10000.0
+THRESHOLD_ENTRADA = 60       # score >= 60 → entra
+CUSTO_OP          = 0.001    # 0.1% entrada + 0.1% saída
+SL_MULT           = 2.0      # Stop Loss  = 2× ATR diário
+TP_MULT           = 4.0      # Take Profit = 4× ATR diário (ratio 1:2)
+CAPITAL_POR_OP    = 0.02     # 2% do saldo por operação
+MAX_POSICOES      = 2
+PORT              = int(os.environ.get("PORT", 8080))
+SEP               = "=" * 60
+COOLDOWN_MIN      = 30       # minutos de espera após SL
 
-# ─── ACTIVOS (ordem de prioridade) ───────────────────────────────────────────
+# ─── ACTIVOS ──────────────────────────────────────────────────────────────────
 ACTIVOS = [
     {
-        "nome": "Bitcoin",   "ticker": "BTC-USD", "simbolo": "BTC/USD",
+        "nome": "Bitcoin",  "ticker": "BTC-USD",  "simbolo": "BTC/USD",  "cripto": True,
         "perfil": "criptomoeda de alta volatilidade 24/7, sensível a ETFs institucionais e fluxos macro",
-        "noticias_termos": ["Bitcoin price", "BTC crypto", "cryptocurrency ETF"],
+        "noticias_termos": ["Bitcoin price", "BTC crypto", "cryptocurrency"],
         "noticias_fallback": [
             "Bitcoin ETF inflows hit new record as institutional demand surges",
             "BTC consolidates above key support after recent rally",
             "Crypto market sentiment turns bullish on Fed pivot expectations",
             "Bitcoin hash rate reaches all-time high signaling network strength",
-            "Digital asset adoption accelerates across major financial institutions",
         ],
     },
     {
-        "nome": "Ouro",      "ticker": "GC=F",    "simbolo": "XAU/USD",
-        "perfil": "metal precioso safe-haven, correlacionado inverso ao dólar e positivo a tensões geopolíticas",
+        "nome": "Ouro",     "ticker": "GC=F",     "simbolo": "XAU/USD",  "cripto": False,
+        "perfil": "metal precioso safe-haven, correlacionado inverso ao dólar",
         "noticias_termos": ["gold price", "Federal Reserve", "XAU USD"],
         "noticias_fallback": [
             "Gold holds near record highs as central banks continue buying",
             "Federal Reserve signals cautious approach to rate cuts",
             "Dollar weakens boosting gold appeal as safe haven",
             "Geopolitical tensions drive safe-haven demand for gold",
-            "Inflation concerns support gold as store of value",
         ],
     },
     {
-        "nome": "Petróleo",  "ticker": "CL=F",    "simbolo": "WTI/USD",
-        "perfil": "commodity energética reactiva a OPEP, inventários EUA e tensões geopolíticas",
+        "nome": "Petróleo", "ticker": "CL=F",     "simbolo": "WTI/USD",  "cripto": False,
+        "perfil": "commodity energética reactiva a OPEP e tensões geopolíticas",
         "noticias_termos": ["crude oil WTI", "OPEC production", "oil inventory"],
         "noticias_fallback": [
             "OPEC+ maintains production cuts amid global demand concerns",
             "US crude inventories show unexpected weekly drawdown",
             "Oil prices firm as Middle East supply risks persist",
             "Energy demand outlook improves on China recovery signals",
-            "WTI crude approaches key technical resistance levels",
         ],
     },
     {
-        "nome": "Prata",     "ticker": "SI=F",    "simbolo": "XAG/USD",
-        "perfil": "metal precioso industrial, mais volátil que o ouro, forte correlação com ouro",
+        "nome": "Prata",    "ticker": "SI=F",     "simbolo": "XAG/USD",  "cripto": False,
+        "perfil": "metal precioso industrial, mais volátil que o ouro",
         "noticias_termos": ["silver price", "precious metals", "silver industrial"],
         "noticias_fallback": [
             "Silver demand surges driven by solar panel manufacturing",
             "Industrial metals rally as global manufacturing PMI improves",
             "Silver outperforms gold in risk-on environment",
-            "Green energy transition continues driving silver demand outlook",
-            "Silver investment flows increase alongside gold buying",
+            "Green energy transition continues driving silver demand",
         ],
     },
     {
-        "nome": "S&P 500",   "ticker": "ES=F",    "simbolo": "SPX",
-        "perfil": "índice das 500 maiores empresas americanas, barómetro do sentimento global",
-        "noticias_termos": ["S&P 500 stocks", "US economy earnings", "Federal Reserve equities"],
+        "nome": "Ethereum", "ticker": "ETH-USD",  "simbolo": "ETH/USD",  "cripto": True,
+        "perfil": "plataforma de smart contracts, correlacionada com Bitcoin mas mais volátil",
+        "noticias_termos": ["Ethereum price", "ETH crypto", "DeFi blockchain"],
+        "noticias_fallback": [
+            "Ethereum staking yields attract institutional interest",
+            "DeFi activity surges on Ethereum network",
+            "ETH upgrades improve scalability and reduce gas fees",
+            "Ethereum ETF flows strengthen as institutional adoption grows",
+        ],
+    },
+    {
+        "nome": "EUR/USD",  "ticker": "EURUSD=X", "simbolo": "EUR/USD",  "cripto": False,
+        "perfil": "par forex mais líquido do mundo, sensível a diferencial BCE/Fed",
+        "noticias_termos": ["EUR USD forex", "European Central Bank", "dollar euro"],
+        "noticias_fallback": [
+            "ECB signals gradual rate cuts as inflation moderates",
+            "Dollar weakens on improved risk appetite globally",
+            "Euro strengthens on better-than-expected German PMI data",
+            "Fed holds rates steady supporting dollar strength",
+        ],
+    },
+    {
+        "nome": "S&P 500",  "ticker": "ES=F",     "simbolo": "SPX",      "cripto": False,
+        "perfil": "índice das 500 maiores empresas americanas, barómetro global",
+        "noticias_termos": ["S&P 500 stocks", "US economy earnings", "Federal Reserve"],
         "noticias_fallback": [
             "S&P 500 approaches all-time highs on strong earnings season",
             "Fed pause expectations boost equities broadly",
             "Corporate profit margins expand despite macro headwinds",
-            "Risk appetite returns as inflation data cools further",
             "Broad market rally driven by tech and financial sectors",
         ],
     },
     {
-        "nome": "Nasdaq",    "ticker": "NQ=F",    "simbolo": "NQ100",
+        "nome": "Nasdaq",   "ticker": "NQ=F",     "simbolo": "NQ100",    "cripto": False,
         "perfil": "índice tecnológico, sensível a taxas de juro e earnings de Big Tech",
-        "noticias_termos": ["Nasdaq tech stocks", "AI earnings technology", "growth stocks rates"],
+        "noticias_termos": ["Nasdaq tech stocks", "AI earnings technology", "growth stocks"],
         "noticias_fallback": [
             "Nasdaq climbs on blowout earnings from major tech companies",
             "AI infrastructure spending cycle continues to drive valuations",
             "Rate cut expectations boost growth and technology stocks",
             "Big Tech outperforms as cloud revenue beats estimates",
-            "Technology sector leads market rally on AI optimism",
         ],
     },
 ]
 
-# Pares correlacionados — nunca abertos em simultâneo
 CORRELACOES = [
     frozenset({"S&P 500", "Nasdaq"}),
     frozenset({"Ouro", "Prata"}),
+    frozenset({"Bitcoin", "Ethereum"}),
 ]
 
 
-# ─── HTTP SERVER ─────────────────────────────────────────────────────────────
+# ─── HTTP SERVER ──────────────────────────────────────────────────────────────
 def iniciar_servidor_http():
     class Handler(http.server.BaseHTTPRequestHandler):
         ROTAS = {
@@ -145,10 +162,11 @@ def iniciar_servidor_http():
 # ─── CARTEIRA ─────────────────────────────────────────────────────────────────
 def carteira_vazia():
     return {
-        "saldo": SALDO_INICIAL,
-        "custos_totais": 0.0,
+        "saldo":           SALDO_INICIAL,
+        "custos_totais":   0.0,
         "posicoes_abertas": [],
-        "historico": [],
+        "historico":       [],
+        "cooldowns":       {},
         "estatisticas": {
             "total_operacoes": 0, "ganhas": 0, "perdidas": 0,
             "win_rate": 0.0, "lucro_liquido_total": 0.0,
@@ -161,7 +179,6 @@ def carregar_carteira():
     if os.path.exists(FICHEIRO_CARTEIRA):
         with open(FICHEIRO_CARTEIRA, "r") as f:
             c = json.load(f)
-        # Migrar formato antigo
         if "posicao_aberta" in c:
             pos_antiga = c.pop("posicao_aberta")
             if pos_antiga and "posicoes_abertas" not in c:
@@ -169,6 +186,7 @@ def carregar_carteira():
         c.setdefault("posicoes_abertas", [])
         c.setdefault("custos_totais", 0.0)
         c.setdefault("historico", [])
+        c.setdefault("cooldowns", {})
         c.setdefault("estatisticas", carteira_vazia()["estatisticas"])
         return c
     return carteira_vazia()
@@ -187,42 +205,268 @@ def atualizar_estatisticas(carteira):
     lucro = sum(h.get("lucro_liquido", h.get("lucro", 0)) for h in hist)
     rent  = (carteira["saldo"] - SALDO_INICIAL) / SALDO_INICIAL * 100
     carteira["estatisticas"] = {
-        "total_operacoes": total,
-        "ganhas":          gan,
-        "perdidas":        per,
-        "win_rate":        round(gan / total * 100, 1) if total > 0 else 0.0,
+        "total_operacoes":     total,
+        "ganhas":              gan,
+        "perdidas":            per,
+        "win_rate":            round(gan / total * 100, 1) if total > 0 else 0.0,
         "lucro_liquido_total": round(lucro, 2),
-        "custos_totais":   round(carteira.get("custos_totais", 0), 2),
-        "rentabilidade":   round(rent, 2),
+        "custos_totais":       round(carteira.get("custos_totais", 0), 2),
+        "rentabilidade":       round(rent, 2),
     }
     return carteira
 
 
+# ─── FILTROS ──────────────────────────────────────────────────────────────────
+def calcular_tendencia(ind):
+    """ALTA: preco>MM50>MM200 | BAIXA: preco<MM50<MM200 | INDEFINIDA: resto"""
+    p, m50, m200 = ind["preco"], ind["mm50_d"], ind["mm200_d"]
+    if p > m50 and m50 > m200:
+        return "ALTA"
+    if p < m50 and m50 < m200:
+        return "BAIXA"
+    return "INDEFINIDA"
+
+
+def sessao_operacional(activo_cfg):
+    """Retorna (pode_operar: bool, nome_sessao: str)"""
+    if activo_cfg.get("cripto", False):
+        return True, "24/7"
+    h = datetime.now(timezone.utc).hour
+    if 7 <= h < 12:
+        return True, "LONDRA"
+    if 13 <= h < 18:
+        return True, "NEW YORK"
+    return False, f"FECHADO({h:02d}h)"
+
+
 def activos_correlacionados(a, b):
-    return any(a in grupo and b in grupo for grupo in CORRELACOES)
+    return any(a in g and b in g for g in CORRELACOES)
 
 
+def em_cooldown(carteira, nome):
+    ts = carteira.get("cooldowns", {}).get(nome)
+    if not ts:
+        return False
+    ultimo_sl = datetime.fromisoformat(ts)
+    return (datetime.now() - ultimo_sl) < timedelta(minutes=COOLDOWN_MIN)
+
+
+def registar_cooldown(carteira, nome):
+    carteira.setdefault("cooldowns", {})[nome] = datetime.now().isoformat(timespec="seconds")
+    return carteira
+
+
+# ─── MERCADO ──────────────────────────────────────────────────────────────────
+def obter_indicadores(ticker):
+    # Dados horários — preço, RSI, MACD, Bollinger, Stoch, Volume
+    dh     = yf.download(ticker, period="60d", interval="1h", progress=False)
+    ch     = dh["Close"].squeeze()
+    hh     = dh["High"].squeeze()
+    lh     = dh["Low"].squeeze()
+    vh     = dh["Volume"].squeeze()
+
+    preco   = ch.iloc[-1].item()
+    var_24h = (preco - ch.iloc[-24].item()) / ch.iloc[-24].item() * 100
+
+    delta    = ch.diff()
+    ganho    = delta.where(delta > 0, 0).rolling(14).mean()
+    perda    = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rsi_s    = 100 - (100 / (1 + ganho / perda))
+    rsi      = rsi_s.iloc[-1].item()
+    rsi_prev = rsi_s.iloc[-2].item()
+
+    ema12    = ch.ewm(span=12).mean()
+    ema26    = ch.ewm(span=26).mean()
+    macd_l   = ema12 - ema26
+    sig      = macd_l.ewm(span=9).mean()
+    hist_s   = macd_l - sig
+    macd_hist      = hist_s.iloc[-1].item()
+    macd_hist_prev = hist_s.iloc[-2].item()
+
+    mm20h  = ch.rolling(20).mean()
+    std20h = ch.rolling(20).std()
+    bb_up  = (mm20h + 2 * std20h).iloc[-1].item()
+    bb_dn  = (mm20h - 2 * std20h).iloc[-1].item()
+    bb_mid = mm20h.iloc[-1].item()
+
+    l14h   = lh.rolling(14).min()
+    h14h   = hh.rolling(14).max()
+    stk_s  = 100 * (ch - l14h) / (h14h - l14h)
+    stoch_k      = stk_s.iloc[-1].item()
+    stoch_k_prev = stk_s.iloc[-2].item()
+
+    vol_med   = vh.rolling(20).mean().iloc[-1].item()
+    vol_ratio = vh.iloc[-1].item() / vol_med if vol_med > 0 else 1.0
+
+    # Dados diários — MM50, MM200, ATR diário
+    dd    = yf.download(ticker, period="400d", interval="1d", progress=False)
+    cd    = dd["Close"].squeeze()
+    hd    = dd["High"].squeeze()
+    ld    = dd["Low"].squeeze()
+
+    mm50_d  = cd.rolling(50).mean().iloc[-1].item()
+    mm200_d = cd.rolling(200).mean().iloc[-1].item()
+
+    tr1d  = hd - ld
+    tr2d  = (hd - cd.shift(1)).abs()
+    tr3d  = (ld - cd.shift(1)).abs()
+    atr_d = pd.concat([tr1d, tr2d, tr3d], axis=1).max(axis=1).rolling(14).mean().iloc[-1].item()
+
+    return {
+        "preco": preco, "var_24h": var_24h,
+        "rsi": rsi, "rsi_prev": rsi_prev,
+        "macd_hist": macd_hist, "macd_hist_prev": macd_hist_prev,
+        "bb_up": bb_up, "bb_mid": bb_mid, "bb_dn": bb_dn,
+        "stoch_k": stoch_k, "stoch_k_prev": stoch_k_prev,
+        "vol_ratio": vol_ratio,
+        "mm50_d": mm50_d, "mm200_d": mm200_d,
+        "atr_d": atr_d,
+    }
+
+
+def obter_noticias(activo_cfg):
+    api_key  = os.environ.get("NEWSAPI_KEY")
+    noticias = []
+    if api_key:
+        try:
+            for termo in activo_cfg["noticias_termos"]:
+                r = requests.get(
+                    f"https://newsapi.org/v2/everything?q={termo}&language=en&sortBy=publishedAt&pageSize=3",
+                    headers={"X-Api-Key": api_key}, timeout=5,
+                )
+                if r.status_code == 200:
+                    for a in r.json().get("articles", []):
+                        t = a.get("title", "")
+                        if t and t not in noticias and len(t) > 10:
+                            noticias.append(t)
+        except Exception:
+            pass
+    if len(noticias) < 4:
+        noticias += activo_cfg["noticias_fallback"]
+    return noticias[:6]
+
+
+# ─── ANÁLISE ──────────────────────────────────────────────────────────────────
+def analisar_noticias(noticias, activo_cfg, tendencia):
+    """Chama Claude apenas para avaliar o sentimento das notícias."""
+    nome     = activo_cfg["nome"]
+    direcao  = "COMPRAR (alta)" if tendencia == "ALTA" else "VENDER (baixa)"
+    texto    = "\n".join(f"  {i+1}. {n}" for i, n in enumerate(noticias))
+    prompt   = (
+        f"Analisa o sentimento das notícias para {nome} em relação a uma posição {direcao}.\n\n"
+        f"Notícias:\n{texto}\n\n"
+        "Responde APENAS com JSON válido sem markdown:\n"
+        '{"sentimento":"POSITIVO ou NEGATIVO ou NEUTRO","raciocinio":"1 frase directa"}'
+    )
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    resp   = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=120,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    texto_resp = resp.content[0].text.strip()
+    if "```" in texto_resp:
+        texto_resp = texto_resp.split("```")[1]
+        if texto_resp.startswith("json"):
+            texto_resp = texto_resp[4:]
+    return json.loads(texto_resp.strip())
+
+
+def calcular_score(ind, tendencia, sentimento):
+    """
+    100 pontos máximo:
+      RSI favorável      +20
+      MACD hist          +20
+      Stochastic         +15
+      Volume ≥ 0.7×      +15
+      Bollinger          +15
+      Notícias           +15
+    """
+    score   = 0
+    bb_range = ind["bb_up"] - ind["bb_dn"]
+
+    if tendencia == "ALTA":
+        # RSI: não sobrecomprado (tem espaço para subir)
+        if ind["rsi"] < 55:
+            score += 20
+
+        # MACD: histograma positivo ou a recuperar
+        if ind["macd_hist"] > 0 or ind["macd_hist"] > ind["macd_hist_prev"]:
+            score += 20
+
+        # Stochastic: a virar de zona de sobrevenda
+        if ind["stoch_k"] < 50 and ind["stoch_k"] > ind["stoch_k_prev"]:
+            score += 15
+
+        # Volume
+        if ind["vol_ratio"] >= 0.7:
+            score += 15
+
+        # Bollinger: preço no terço inferior (toca banda inferior)
+        if bb_range > 0 and (ind["preco"] - ind["bb_dn"]) / bb_range <= 0.35:
+            score += 15
+
+        # Notícias
+        if sentimento == "POSITIVO":
+            score += 15
+        elif sentimento == "NEUTRO":
+            score += 7
+
+    else:  # BAIXA
+        # RSI: não sobrevendido (tem espaço para descer)
+        if ind["rsi"] > 45:
+            score += 20
+
+        # MACD: histograma negativo ou a deteriorar
+        if ind["macd_hist"] < 0 or ind["macd_hist"] < ind["macd_hist_prev"]:
+            score += 20
+
+        # Stochastic: a virar de zona de sobrecompra
+        if ind["stoch_k"] > 50 and ind["stoch_k"] < ind["stoch_k_prev"]:
+            score += 15
+
+        # Volume
+        if ind["vol_ratio"] >= 0.7:
+            score += 15
+
+        # Bollinger: preço no terço superior (toca banda superior)
+        if bb_range > 0 and (ind["preco"] - ind["bb_dn"]) / bb_range >= 0.65:
+            score += 15
+
+        # Notícias
+        if sentimento == "NEGATIVO":
+            score += 15
+        elif sentimento == "NEUTRO":
+            score += 7
+
+    return min(score, 100)
+
+
+# ─── GESTÃO DE POSIÇÕES ───────────────────────────────────────────────────────
 def verificar_posicoes(carteira, precos):
-    """Fecha posições que atingiram SL ou TP."""
-    posicoes = carteira["posicoes_abertas"]
-    manter   = []
+    posicoes    = carteira["posicoes_abertas"]
+    manter      = []
+    fechados_sl = []
+
     for pos in posicoes:
         nome  = pos["activo"]
         preco = precos.get(nome)
         if preco is None:
-            print(f"  ⚠  [{nome}] preço indisponível — SL/TP não verificado, posição mantida")
+            print(f"  ⚠  [{nome}] preço indisponível — SL/TP não verificado")
             manter.append(pos)
             continue
+
         resultado   = None
         lucro_bruto = 0.0
         preco_fecho = preco
+
         if pos["tipo"] == "COMPRAR":
             if preco >= pos["take_profit"]:
                 lucro_bruto = (pos["take_profit"] - pos["preco_entrada"]) * pos["contratos"]
                 preco_fecho = pos["take_profit"]
                 resultado   = "GANHOU"
             elif preco <= pos["stop_loss"]:
-                lucro_bruto = (pos["stop_loss"]   - pos["preco_entrada"]) * pos["contratos"]
+                lucro_bruto = (pos["stop_loss"] - pos["preco_entrada"]) * pos["contratos"]
                 preco_fecho = pos["stop_loss"]
                 resultado   = "PERDEU"
         elif pos["tipo"] == "VENDER":
@@ -231,57 +475,74 @@ def verificar_posicoes(carteira, precos):
                 preco_fecho = pos["take_profit"]
                 resultado   = "GANHOU"
             elif preco >= pos["stop_loss"]:
-                lucro_bruto = (pos["preco_entrada"] - pos["stop_loss"])   * pos["contratos"]
+                lucro_bruto = (pos["preco_entrada"] - pos["stop_loss"]) * pos["contratos"]
                 preco_fecho = pos["stop_loss"]
                 resultado   = "PERDEU"
+
         if resultado:
-            custo_fecho    = preco_fecho * pos["contratos"] * CUSTO_OP
-            lucro_liquido  = lucro_bruto - custo_fecho
-            carteira["saldo"]        += lucro_liquido
+            custo_fecho   = preco_fecho * pos["contratos"] * CUSTO_OP
+            lucro_liquido = lucro_bruto - custo_fecho
+            carteira["saldo"]         += lucro_liquido
             carteira["custos_totais"] += custo_fecho
             carteira["historico"].append({
                 "activo":        nome,
                 "tipo":          pos["tipo"],
                 "entrada":       pos["preco_entrada"],
-                "saida":         preco_fecho,
+                "saida":         round(preco_fecho, 4),
                 "lucro_bruto":   round(lucro_bruto, 2),
                 "custos":        round(pos.get("custo_entrada", 0) + custo_fecho, 4),
                 "lucro_liquido": round(lucro_liquido, 2),
-                "lucro":         round(lucro_liquido, 2),  # compat dashboard
+                "lucro":         round(lucro_liquido, 2),
                 "resultado":     resultado,
                 "hora_abertura": pos["hora_abertura"],
                 "hora_fecho":    datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "hora":          datetime.now().strftime("%Y-%m-%d %H:%M"),  # compat
+                "hora":          datetime.now().strftime("%Y-%m-%d %H:%M"),
             })
             sinal = "+" if lucro_liquido >= 0 else ""
-            print(f"  ✓ FECHADA [{nome}] {resultado} | Bruto:${lucro_bruto:.2f} Custos:${custo_fecho:.2f} Líquido:${sinal}{lucro_liquido:.2f}")
+            print(f"  ✓ FECHADA [{nome}] {resultado} | "
+                  f"Bruto:${lucro_bruto:.2f} Custos:${custo_fecho:.2f} Líquido:${sinal}{lucro_liquido:.2f}")
+            if resultado == "PERDEU":
+                fechados_sl.append(nome)
         else:
+            # Mostrar PnL flutuante
+            if pos["tipo"] == "COMPRAR":
+                pnl = (preco - pos["preco_entrada"]) * pos["contratos"]
+            else:
+                pnl = (pos["preco_entrada"] - preco) * pos["contratos"]
+            sinal = "+" if pnl >= 0 else ""
+            dist_sl = abs(preco - pos["stop_loss"])
+            dist_tp = abs(preco - pos["take_profit"])
+            print(f"  ↔ ABERTA [{nome}] {pos['tipo']} @ {pos['preco_entrada']:.4f} "
+                  f"| Actual: {preco:.4f} | PnL:{sinal}${pnl:.2f} "
+                  f"| SL-dist:{dist_sl:.4f} TP-dist:{dist_tp:.4f}")
             manter.append(pos)
+
     carteira["posicoes_abertas"] = manter
+    for nome in fechados_sl:
+        carteira = registar_cooldown(carteira, nome)
     return carteira
 
 
-def abrir_posicao(carteira, activo, tipo, preco, stop_loss, take_profit, atr):
+def abrir_posicao(carteira, activo, tipo, preco, atr_d):
     if len(carteira["posicoes_abertas"]) >= MAX_POSICOES:
         return carteira, False, "máximo de posições atingido"
+
     nomes_abertos = {p["activo"] for p in carteira["posicoes_abertas"]}
     for nome_ab in nomes_abertos:
         if activos_correlacionados(activo, nome_ab):
             return carteira, False, f"correlacionado com {nome_ab}"
-    # Calcular SL/TP a partir de ATR se não fornecidos
-    if not stop_loss:
-        stop_loss  = round(preco - SL_MULT * atr if tipo == "COMPRAR" else preco + SL_MULT * atr, 4)
-    if not take_profit:
-        take_profit = round(preco + TP_MULT * atr if tipo == "COMPRAR" else preco - TP_MULT * atr, 4)
-    # Garantir SL não excede 3% do preço
-    sl_pct = abs(preco - stop_loss) / preco
-    if sl_pct > 0.03:
-        sl_dist    = preco * 0.03
-        stop_loss  = round(preco - sl_dist if tipo == "COMPRAR" else preco + sl_dist, 4)
-        take_profit = round(preco + 2 * sl_dist if tipo == "COMPRAR" else preco - 2 * sl_dist, 4)
-    risco    = abs(preco - stop_loss)
+
+    if tipo == "COMPRAR":
+        stop_loss   = round(preco - SL_MULT * atr_d, 4)
+        take_profit = round(preco + TP_MULT * atr_d, 4)
+    else:
+        stop_loss   = round(preco + SL_MULT * atr_d, 4)
+        take_profit = round(preco - TP_MULT * atr_d, 4)
+
+    risco = abs(preco - stop_loss)
     if risco <= 0:
-        return carteira, False, "risco calculado a zero"
+        return carteira, False, "risco a zero"
+
     contratos     = round(carteira["saldo"] * CAPITAL_POR_OP / risco, 6)
     custo_entrada = preco * contratos * CUSTO_OP
     carteira["saldo"]         -= custo_entrada
@@ -293,187 +554,13 @@ def abrir_posicao(carteira, activo, tipo, preco, stop_loss, take_profit, atr):
         "stop_loss":     round(stop_loss, 4),
         "take_profit":   round(take_profit, 4),
         "contratos":     contratos,
+        "atr_d":         round(atr_d, 4),
         "hora_abertura": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "custo_entrada": round(custo_entrada, 4),
     })
-    print(f"  ★ ABERTA [{activo}] {tipo} @ {preco:.4f} | SL:{stop_loss:.4f} TP:{take_profit:.4f} | Custo:${custo_entrada:.2f}")
-    return carteira, True, f"{tipo} @ {preco:.2f}"
-
-
-# ─── MERCADO ──────────────────────────────────────────────────────────────────
-def sessao_mercado():
-    h = datetime.now(timezone.utc).hour
-    if 8 <= h < 17:  return "LONDRA"
-    if 13 <= h < 22: return "NEW YORK"
-    return "ASIA"
-
-
-def obter_indicadores(ticker):
-    dados  = yf.download(ticker, period="90d", interval="1h", progress=False)
-    close  = dados["Close"].squeeze()
-    high   = dados["High"].squeeze()
-    low    = dados["Low"].squeeze()
-    volume = dados["Volume"].squeeze()
-
-    preco     = close.iloc[-1].item()
-    var_24h   = (preco - close.iloc[-24].item()) / close.iloc[-24].item() * 100
-
-    mm20  = close.rolling(20).mean()
-    mm50  = close.rolling(50).mean()
-    mm200 = close.rolling(200).mean()
-
-    delta      = close.diff()
-    ganho      = delta.where(delta > 0, 0).rolling(14).mean()
-    perda      = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rsi_s      = 100 - (100 / (1 + ganho / perda))
-    rsi        = rsi_s.iloc[-1].item()
-    rsi_prev   = rsi_s.iloc[-2].item()
-
-    ema12      = close.ewm(span=12).mean()
-    ema26      = close.ewm(span=26).mean()
-    macd_l     = ema12 - ema26
-    macd_sig   = macd_l.ewm(span=9).mean()
-    hist_s     = macd_l - macd_sig
-    macd_hist      = hist_s.iloc[-1].item()
-    macd_hist_prev = hist_s.iloc[-2].item()
-
-    std    = close.rolling(20).std()
-    bb_mid = mm20
-    bb_up  = (bb_mid + 2 * std).iloc[-1].item()
-    bb_dn  = (bb_mid - 2 * std).iloc[-1].item()
-
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low  - close.shift(1)).abs()
-    atr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).rolling(14).mean().iloc[-1].item()
-
-    l14     = low.rolling(14).min()
-    h14     = high.rolling(14).max()
-    stoch_s = 100 * (close - l14) / (h14 - l14)
-    stoch_k      = stoch_s.iloc[-1].item()
-    stoch_k_prev = stoch_s.iloc[-2].item()
-    stoch_d      = stoch_s.rolling(3).mean().iloc[-1].item()
-
-    vol_med   = volume.rolling(20).mean().iloc[-1].item()
-    vol_ratio = volume.iloc[-1].item() / vol_med if vol_med > 0 else 1.0
-
-    return {
-        "preco": preco, "var_24h": var_24h,
-        "mm20": mm20.iloc[-1].item(), "mm50": mm50.iloc[-1].item(), "mm200": mm200.iloc[-1].item(),
-        "rsi": rsi, "rsi_prev": rsi_prev,
-        "macd": macd_l.iloc[-1].item(), "signal": macd_sig.iloc[-1].item(),
-        "macd_hist": macd_hist, "macd_hist_prev": macd_hist_prev,
-        "bb_up": bb_up, "bb_mid": bb_mid.iloc[-1].item(), "bb_dn": bb_dn,
-        "atr": atr, "stoch_k": stoch_k, "stoch_k_prev": stoch_k_prev, "stoch_d": stoch_d,
-        "vol_ratio": vol_ratio, "sessao": sessao_mercado(),
-        "max7":  close.tail(168).max().item(), "min7":  close.tail(168).min().item(),
-        "max30": close.tail(720).max().item(), "min30": close.tail(720).min().item(),
-    }
-
-
-def obter_noticias(activo_cfg):
-    api_key  = os.environ.get("NEWSAPI_KEY")
-    noticias = []
-    if api_key:
-        try:
-            headers = {"X-Api-Key": api_key}
-            for termo in activo_cfg["noticias_termos"]:
-                r = requests.get(
-                    f"https://newsapi.org/v2/everything?q={termo}&language=en&sortBy=publishedAt&pageSize=3",
-                    headers=headers, timeout=5
-                )
-                if r.status_code == 200:
-                    for a in r.json().get("articles", []):
-                        t = a.get("title", "")
-                        if t and t not in noticias and len(t) > 10:
-                            noticias.append(t)
-        except Exception:
-            pass
-    if len(noticias) < 4:
-        noticias += activo_cfg["noticias_fallback"]
-    return noticias[:7]
-
-
-# ─── ANÁLISE COM CLAUDE ───────────────────────────────────────────────────────
-def analisar(d, noticias, activo_cfg):
-    nome    = activo_cfg["nome"]
-    simbolo = activo_cfg["simbolo"]
-    hora    = datetime.now().strftime("%H:%M de %d/%m/%Y")
-
-    rsi_trend   = "a SUBIR" if d["rsi"]       > d["rsi_prev"]       else "a DESCER"
-    hist_trend  = "a SUBIR (bullish)" if d["macd_hist"] > d["macd_hist_prev"] else "a DESCER (bearish)"
-    stoch_trend = "a SUBIR" if d["stoch_k"]   > d["stoch_k_prev"]   else "a DESCER"
-
-    sl_buy  = round(d["preco"] - SL_MULT * d["atr"], 4)
-    tp_buy  = round(d["preco"] + TP_MULT * d["atr"], 4)
-    sl_sell = round(d["preco"] + SL_MULT * d["atr"], 4)
-    tp_sell = round(d["preco"] - TP_MULT * d["atr"], 4)
-
-    noticias_texto = "\n".join(f"  {i+1}. {n}" for i, n in enumerate(noticias))
-
-    prompt = f"""És um trader profissional com 30 anos de experiência. Analisa {nome} ({simbolo}) AGORA e calcula o score de entrada.
-
-HORA: {hora} | SESSÃO: {d['sessao']}
-PERFIL: {activo_cfg['perfil']}
-
-━━ DADOS TÉCNICOS ━━
-Preço:    {d['preco']:.4f} | Var 24h: {d['var_24h']:+.2f}%
-MM20/50/200: {d['mm20']:.4f} / {d['mm50']:.4f} / {d['mm200']:.4f}
-RSI(14):  {d['rsi']:.1f} {rsi_trend} (anterior: {d['rsi_prev']:.1f})
-MACD Hist: {d['macd_hist']:.6f} {hist_trend} (anterior: {d['macd_hist_prev']:.6f})
-Bollinger: {d['bb_dn']:.4f} / {d['bb_mid']:.4f} / {d['bb_up']:.4f}
-Stoch K:  {d['stoch_k']:.1f} {stoch_trend} (anterior: {d['stoch_k_prev']:.1f}) | D: {d['stoch_d']:.1f}
-Volume:   {d['vol_ratio']:.2f}x média 20h
-ATR(14):  {d['atr']:.4f}
-
-━━ NOTÍCIAS RECENTES ━━
-{noticias_texto}
-
-━━ SISTEMA DE SCORE (máx 130 pts → ÷1.3 = 0-100) ━━
-
-COMPRAR — pontua se:
-  RSI < 45 → +20 pts | RSI 45-55 a SUBIR → +10 pts
-  MACD histograma positivo OU a SUBIR → +20 pts
-  Preço > MM20 ({d['mm20']:.4f}) → +15 pts
-  Preço ≤ Bollinger inferior ({d['bb_dn']:.4f}) → +20 pts
-  Stoch K < 30 e a SUBIR → +15 pts
-  Volume ≥ 0.8x média → +10 pts
-  Notícias POSITIVAS para {nome} → +20 pts
-  Sessão LONDRA ou NEW YORK → +10 pts
-
-VENDER — pontua se:
-  RSI > 55 → +20 pts | RSI 45-55 a DESCER → +10 pts
-  MACD histograma negativo OU a DESCER → +20 pts
-  Preço < MM20 ({d['mm20']:.4f}) → +15 pts
-  Preço ≥ Bollinger superior ({d['bb_up']:.4f}) → +20 pts
-  Stoch K > 70 e a DESCER → +15 pts
-  Volume ≥ 0.8x média → +10 pts
-  Notícias NEGATIVAS para {nome} → +20 pts
-  Sessão LONDRA ou NEW YORK → +10 pts
-
-DECISÃO: score_compra ≥ 58 → COMPRAR | score_venda ≥ 58 → VENDER | ambos < 58 → AGUARDAR
-Se ambos ≥ 58: usa o maior.
-
-Stop Loss COMPRAR:  {sl_buy:.4f} (1.5×ATR abaixo)
-Take Profit COMPRAR: {tp_buy:.4f} (3×ATR acima)
-Stop Loss VENDER:   {sl_sell:.4f} (1.5×ATR acima)
-Take Profit VENDER: {tp_sell:.4f} (3×ATR abaixo)
-
-Responde APENAS com JSON válido sem texto extra, sem markdown, sem backticks:
-{{"decisao":"COMPRAR ou VENDER ou AGUARDAR","score":75,"confianca":75,"stop_loss":null,"take_profit":null,"raciocinio":"3 frases directas e precisas","factores_positivos":["f1","f2"],"factores_negativos":["f1","f2"],"sentimento_noticias":"POSITIVO ou NEGATIVO ou NEUTRO"}}"""
-
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    resp   = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=600,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    texto = resp.content[0].text.strip()
-    if "```" in texto:
-        texto = texto.split("```")[1]
-        if texto.startswith("json"):
-            texto = texto[4:]
-    return json.loads(texto.strip())
+    print(f"  ★ ABERTA [{activo}] {tipo} @ {preco:.4f} | "
+          f"SL:{stop_loss:.4f} TP:{take_profit:.4f} | ATR-d:{atr_d:.4f} Custo:${custo_entrada:.2f}")
+    return carteira, True, f"{tipo} @ {preco:.4f}"
 
 
 # ─── DASHBOARD ────────────────────────────────────────────────────────────────
@@ -488,15 +575,12 @@ def atualizar_dashboard(carteira, novas_analises=None):
 
     stats    = carteira.get("estatisticas", {})
     posicoes = carteira.get("posicoes_abertas", [])
-
     dados["carteira"] = {
-        # Novo formato
         "saldo":              carteira["saldo"],
         "custos_totais":      carteira.get("custos_totais", 0),
         "posicoes_abertas":   posicoes,
         "estatisticas":       stats,
         "historico":          carteira.get("historico", []),
-        # Compat com dashboard existente
         "rentabilidade":      stats.get("rentabilidade", 0),
         "total_operacoes":    stats.get("total_operacoes", 0),
         "operacoes_ganhas":   stats.get("ganhas", 0),
@@ -516,138 +600,160 @@ def atualizar_dashboard(carteira, novas_analises=None):
 
 # ─── CICLO PRINCIPAL ──────────────────────────────────────────────────────────
 def executar_ciclo():
-    hora = datetime.now().strftime("%H:%M")
+    hora_utc = datetime.now(timezone.utc).strftime("%H:%M UTC")
     print(f"\n{SEP}")
-    print(f"=== CICLO 30MIN — {hora} ===")
+    print(f"=== CICLO 15MIN — {hora_utc} ===")
     print(SEP)
 
     carteira       = carregar_carteira()
     precos_atuais  = {}
-    resultados     = []    # [(activo_cfg, d, r)]
+    resultados     = []   # (cfg, ind, tend, score, direcao, pode_operar, sessao_nome)
     analises_novos = []
 
-    for activo_cfg in ACTIVOS:
-        nome   = activo_cfg["nome"]
-        ticker = activo_cfg["ticker"]
+    for cfg in ACTIVOS:
+        nome   = cfg["nome"]
+        ticker = cfg["ticker"]
         print(f"[{nome:<10}] ", end="", flush=True)
-        try:
-            d = obter_indicadores(ticker)
-            precos_atuais[nome] = d["preco"]
-        except Exception as e:
-            print(f"ERRO indicadores: {e}")
-            continue
-
-        noticias = obter_noticias(activo_cfg)
 
         try:
-            r = analisar(d, noticias, activo_cfg)
+            ind = obter_indicadores(ticker)
+            precos_atuais[nome] = ind["preco"]
         except Exception as e:
-            print(f"ERRO análise: {e}")
+            print(f"ERRO dados: {e}")
             continue
 
-        score   = r.get("score", 0)
-        decisao = r.get("decisao", "AGUARDAR")
-        flag    = " ★" if decisao != "AGUARDAR" and score >= THRESHOLD_ENTRADA else \
-                  " ○" if score >= THRESHOLD_MONITOR else ""
+        tend                = calcular_tendencia(ind)
+        pode_operar, sessao = sessao_operacional(cfg)
+        cooldown_ativo      = em_cooldown(carteira, nome)
+        ja_tem_posicao      = any(p["activo"] == nome for p in carteira["posicoes_abertas"])
 
-        print(f"${d['preco']:<12.4f} RSI:{d['rsi']:.0f}  Score:{score:>3}%  {decisao}{flag}")
+        direcao = {"ALTA": "COMPRAR", "BAIXA": "VENDER"}.get(tend)
 
-        resultados.append((activo_cfg, d, r))
+        # Só analisa notícias se todos os filtros passam (poupa API calls)
+        score     = 0
+        sentimento = "NEUTRO"
+        raciocinio = ""
+        pode_entrar = direcao and pode_operar and not cooldown_ativo and not ja_tem_posicao
+
+        if pode_entrar:
+            noticias = obter_noticias(cfg)
+            try:
+                res        = analisar_noticias(noticias, cfg, tend)
+                sentimento = res.get("sentimento", "NEUTRO")
+                raciocinio = res.get("raciocinio", "")
+            except Exception:
+                sentimento = "NEUTRO"
+            score = calcular_score(ind, tend, sentimento)
+
+        # Motivos de skip para o log
+        skips = []
+        if ja_tem_posicao:               skips.append("posição aberta")
+        if not direcao:                  skips.append("tend.INDEFINIDA")
+        if not pode_operar:              skips.append(sessao)
+        if cooldown_ativo:               skips.append("cooldown SL")
+        skip_str = f"  [{', '.join(skips)}]" if skips else ""
+
+        flag = " ★" if (pode_entrar and score >= THRESHOLD_ENTRADA) else ""
+        print(f"${ind['preco']:<12.4f} | {tend:<10} | {score:>3}% | {sessao:<14} | "
+              f"{(direcao or 'AGUARDAR'):<8}{flag}{skip_str}")
+
+        resultados.append((cfg, ind, tend, score, direcao, pode_entrar, sessao, sentimento))
         analises_novos.append({
             "hora":                datetime.now().strftime("%Y-%m-%d %H:%M"),
             "activo":              nome,
-            "simbolo":             activo_cfg["simbolo"],
-            "preco":               round(d["preco"], 4),
-            "rsi":                 round(d["rsi"], 1),
-            "decisao":             decisao,
+            "simbolo":             cfg["simbolo"],
+            "preco":               round(ind["preco"], 4),
+            "rsi":                 round(ind["rsi"], 1),
+            "decisao":             direcao or "AGUARDAR",
             "score":               score,
-            "confianca":           r.get("confianca", score),
-            "risco":               "ALTO" if score >= 70 else "MEDIO" if score >= 50 else "BAIXO",
-            "stop_loss":           r.get("stop_loss"),
-            "take_profit":         r.get("take_profit"),
-            "raciocinio":          r.get("raciocinio", ""),
-            "sentimento_noticias": r.get("sentimento_noticias", "NEUTRO"),
-            "factores_positivos":  r.get("factores_positivos", []),
-            "factores_negativos":  r.get("factores_negativos", []),
+            "confianca":           score,
+            "tendencia":           tend,
+            "sessao":              sessao,
+            "risco":               "ALTO" if score >= 75 else "MEDIO" if score >= 60 else "BAIXO",
+            "raciocinio":          raciocinio,
+            "sentimento_noticias": sentimento,
+            "factores_positivos":  [],
+            "factores_negativos":  [],
         })
 
-    # Verificar posições abertas
+    # Verificar SL/TP nas posições abertas
     if precos_atuais:
         carteira = verificar_posicoes(carteira, precos_atuais)
 
-    # Seleccionar melhores oportunidades
-    oportunidades = sorted(
-        [(cfg, d, r) for cfg, d, r in resultados
-         if r.get("score", 0) >= THRESHOLD_ENTRADA and r.get("decisao") in ("COMPRAR", "VENDER")],
-        key=lambda x: x[2].get("score", 0), reverse=True
+    # Seleccionar e executar melhores oportunidades
+    candidatos = sorted(
+        [(cfg, ind, score, direcao)
+         for cfg, ind, tend, score, direcao, pode, sessao, sent in resultados
+         if pode and direcao and score >= THRESHOLD_ENTRADA],
+        key=lambda x: x[2], reverse=True,
     )
 
     nomes_posicoes = {p["activo"] for p in carteira["posicoes_abertas"]}
     acoes = []
 
-    for cfg, d, r in oportunidades:
+    for cfg, ind, score, direcao in candidatos:
         nome = cfg["nome"]
         if nome in nomes_posicoes:
             continue
         if len(carteira["posicoes_abertas"]) >= MAX_POSICOES:
             break
+        if em_cooldown(carteira, nome):
+            acoes.append(f"REJEITADO {nome}: cooldown SL activo")
+            continue
         corr = next((n for n in nomes_posicoes if activos_correlacionados(nome, n)), None)
         if corr:
-            print(f"  ⚠  {nome} correlacionado com {corr} — ignorado")
+            acoes.append(f"REJEITADO {nome}: correlacionado com {corr}")
             continue
-        carteira, aberta, motivo = abrir_posicao(
-            carteira, nome, r["decisao"], d["preco"],
-            r.get("stop_loss"), r.get("take_profit"), d["atr"]
-        )
+        carteira, aberta, motivo = abrir_posicao(carteira, nome, direcao, ind["preco"], ind["atr_d"])
         if aberta:
             nomes_posicoes.add(nome)
-            acoes.append(f"ENTROU {nome} {r['decisao']} @ {d['preco']:.4f}  score:{r.get('score')}%")
+            acoes.append(f"ENTROU {nome} {direcao} @ {ind['preco']:.4f}  score:{score}%")
         else:
             acoes.append(f"REJEITADO {nome}: {motivo}")
 
     if not acoes:
-        max_s = max((r.get("score", 0) for _, _, r in resultados), default=0)
-        acoes.append(f"AGUARDOU — score máx {max_s}% < {THRESHOLD_ENTRADA}%" if max_s < THRESHOLD_ENTRADA
-                     else f"AGUARDOU — posições ocupadas ou correlação")
+        if candidatos:
+            acoes.append("AGUARDOU — posições cheias ou correlação")
+        else:
+            melhor = max((score for _, _, _, score, _, _, _, _ in resultados), default=0)
+            razao  = (f"score máx {melhor}% < {THRESHOLD_ENTRADA}%" if melhor < THRESHOLD_ENTRADA
+                      else "sem tendência definida ou fora de sessão")
+            acoes.append(f"AGUARDOU — {razao}")
 
-    # Log resumo
     print()
-    if oportunidades:
-        best = oportunidades[0]
-        print(f"[MELHOR SETUP] {best[0]['nome']}  score:{best[2].get('score')}%  {best[2].get('decisao')}")
-    else:
-        print(f"[MELHOR SETUP] Nenhum com score ≥ {THRESHOLD_ENTRADA}%")
     for a in acoes:
         print(f"[ACÇÃO]        {a}")
 
     atualizar_estatisticas(carteira)
-    stats = carteira["estatisticas"]
+    stats   = carteira["estatisticas"]
     pos_str = ", ".join(f"{p['activo']} {p['tipo']}" for p in carteira["posicoes_abertas"]) or "—"
     print(f"[CARTEIRA]     ${carteira['saldo']:.2f} ({stats['rentabilidade']:+.2f}%) | "
-          f"Posições: {pos_str} | Lucro líquido: ${stats['lucro_liquido_total']:.2f} | "
+          f"Posições: {pos_str} | Lucro: ${stats['lucro_liquido_total']:.2f} | "
           f"Custos: ${stats['custos_totais']:.2f}")
     print(SEP)
 
     guardar_carteira(carteira)
     atualizar_dashboard(carteira, analises_novos)
-    print(f"  → {len(analises_novos)} análises guardadas em dados_dashboard.json\n")
+    print(f"  → {len(analises_novos)} análises | próximo ciclo em 15 minutos\n")
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     threading.Thread(target=iniciar_servidor_http, daemon=True).start()
     print(f"\n{SEP}")
-    print(f"  ROBOTRADING AGENTE ASSERTIVO v2")
-    print(f"  6 activos | Ciclo 30min | Threshold {THRESHOLD_ENTRADA}% | HTTP porta {PORT}")
-    print(f"  Bitcoin primeiro — {' | '.join(a['nome'] for a in ACTIVOS)}")
+    print(f"  ROBOTRADING ESTRATÉGIA v3")
+    print(f"  8 activos | Ciclo 15min | Score ≥{THRESHOLD_ENTRADA}% | Tendência obrigatória")
+    print(f"  SL=2×ATR-d | TP=4×ATR-d | Capital/op=2% | Cooldown={COOLDOWN_MIN}min após SL")
+    print(f"  Sessões: Londra 07-12 UTC | NY 13-18 UTC | Cripto 24/7")
+    print(f"  {' | '.join(a['nome'] for a in ACTIVOS)}")
     print(f"{SEP}\n")
+
     while True:
         try:
             executar_ciclo()
-            print(f"  Próximo ciclo em 30 minutos ({datetime.now().strftime('%H:%M')})\n")
-            time.sleep(1800)
+            time.sleep(900)
         except KeyboardInterrupt:
-            print("\nRobo parado.")
+            print("\nRobô parado.")
             break
         except Exception as e:
             print(f"\n[ERRO CICLO] {e}")
