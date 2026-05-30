@@ -535,6 +535,31 @@ def verificar_posicoes(carteira, precos):
     return carteira
 
 
+_SL_TP_ACTIVO = {
+    # nome        : (sl_mult, tp_mult)
+    "Bitcoin"  : (1.0, 2.0),
+    "Ethereum" : (1.0, 2.0),
+    "Ouro"     : (1.5, 3.0),
+    "Petróleo" : (1.0, 2.0),
+    "Prata"    : (1.0, 2.0),
+    "EUR/USD"  : (1.0, 1.5),
+    "S&P 500"  : (1.5, 2.5),
+    "Nasdaq"   : (1.5, 2.5),
+}
+
+
+def calcular_sl_tp(activo, preco, atr_diario, tipo):
+    """Devolve (stop_loss, take_profit) com multiplicadores específicos por activo."""
+    sl_mult, tp_mult = _SL_TP_ACTIVO.get(activo, (SL_MULT, TP_MULT))
+    if tipo == "COMPRAR":
+        stop_loss   = round(preco - sl_mult * atr_diario, 4)
+        take_profit = round(preco + tp_mult * atr_diario, 4)
+    else:
+        stop_loss   = round(preco + sl_mult * atr_diario, 4)
+        take_profit = round(preco - tp_mult * atr_diario, 4)
+    return stop_loss, take_profit
+
+
 def abrir_posicao(carteira, activo, tipo, preco, atr_d):
     if len(carteira["posicoes_abertas"]) >= MAX_POSICOES:
         return carteira, False, "máximo de posições atingido"
@@ -544,12 +569,7 @@ def abrir_posicao(carteira, activo, tipo, preco, atr_d):
         if activos_correlacionados(activo, nome_ab):
             return carteira, False, f"correlacionado com {nome_ab}"
 
-    if tipo == "COMPRAR":
-        stop_loss   = round(preco - SL_MULT * atr_d, 4)
-        take_profit = round(preco + TP_MULT * atr_d, 4)
-    else:
-        stop_loss   = round(preco + SL_MULT * atr_d, 4)
-        take_profit = round(preco - TP_MULT * atr_d, 4)
+    stop_loss, take_profit = calcular_sl_tp(activo, preco, atr_d, tipo)
 
     risco = abs(preco - stop_loss)
     if risco <= 0:
