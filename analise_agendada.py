@@ -218,12 +218,23 @@ def atualizar_estatisticas(carteira):
 
 # ─── FILTROS ──────────────────────────────────────────────────────────────────
 def calcular_tendencia(ind):
-    """ALTA: preco>MM50>MM200 | BAIXA: preco<MM50<MM200 | INDEFINIDA: resto"""
+    """ALTA: preco>MM50>MM200 | BAIXA: preco<MM50<MM200 | INDEFINIDA: resto.
+    Fallback para MM100 quando MM200 é NaN (dados insuficientes em futuros)."""
+    import math
     p, m50, m200 = ind["preco"], ind["mm50_d"], ind["mm200_d"]
-    if p > m50 and m50 > m200:
-        return "ALTA"
-    if p < m50 and m50 < m200:
-        return "BAIXA"
+    if not math.isnan(m200):
+        if p > m50 and m50 > m200:
+            return "ALTA"
+        if p < m50 and m50 < m200:
+            return "BAIXA"
+        return "INDEFINIDA"
+    # MM200 indisponível — usa MM100 como referência de tendência longa
+    m100 = ind.get("mm100_d", float("nan"))
+    if not math.isnan(m100):
+        if p > m50 and m50 > m100:
+            return "ALTA"
+        if p < m50 and m50 < m100:
+            return "BAIXA"
     return "INDEFINIDA"
 
 
@@ -305,6 +316,7 @@ def obter_indicadores(ticker):
     ld    = dd["Low"].squeeze()
 
     mm50_d  = cd.rolling(50).mean().iloc[-1].item()
+    mm100_d = cd.rolling(100).mean().iloc[-1].item()
     mm200_d = cd.rolling(200).mean().iloc[-1].item()
 
     tr1d  = hd - ld
@@ -319,7 +331,7 @@ def obter_indicadores(ticker):
         "bb_up": bb_up, "bb_mid": bb_mid, "bb_dn": bb_dn,
         "stoch_k": stoch_k, "stoch_k_prev": stoch_k_prev,
         "vol_ratio": vol_ratio,
-        "mm50_d": mm50_d, "mm200_d": mm200_d,
+        "mm50_d": mm50_d, "mm100_d": mm100_d, "mm200_d": mm200_d,
         "atr_d": atr_d,
     }
 
@@ -629,8 +641,8 @@ def executar_ciclo():
 
         direcao = {"ALTA": "COMPRAR", "BAIXA": "VENDER"}.get(tend)
 
-        # Só analisa notícias se todos os filtros passam (poupa API calls)
-        score     = 0
+        # Notícias apenas quando pode entrar (poupa API calls)
+        score      = 0
         sentimento = "NEUTRO"
         raciocinio = ""
         pode_entrar = direcao and pode_operar and not cooldown_ativo and not ja_tem_posicao
@@ -643,7 +655,14 @@ def executar_ciclo():
                 raciocinio = res.get("raciocinio", "")
             except Exception:
                 sentimento = "NEUTRO"
+
+        # Score calculado sempre — para INDEFINIDA usa direcção de curto prazo (só display)
+        if direcao:
             score = calcular_score(ind, tend, sentimento)
+        else:
+            # Indica direcção sugerida pelos indicadores de curto prazo
+            dir_hint = "ALTA" if ind["macd_hist"] > ind["macd_hist_prev"] else "BAIXA"
+            score = calcular_score(ind, dir_hint, "NEUTRO")
 
         # Motivos de skip para o log
         skips = []
