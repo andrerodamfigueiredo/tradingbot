@@ -2,15 +2,44 @@
   "saldo": 10000.0,
   "custos_totais": 0.0,
   "posicoes_abertas": [],
-  "historico": [],
   "cooldowns": {},
+  "historico": [
+    {
+      "activo": "Petróleo",
+      "tipo": "COMPRAR",
+      "entrada": 96.6,
+      "saida": 94.5332,
+      "lucro_bruto": -200.0,
+      "custos": 18.4956,
+      "lucro_liquido": -209.15,
+      "lucro": -209.15,
+      "resultado": "PERDEU",
+      "hora_abertura": "2026-05-25 19:52",
+      "hora_fecho": "2026-05-26 04:31",
+      "hora": "2026-05-26 04:31"
+    },
+    {
+      "activo": "Bitcoin",
+      "tipo": "COMPRAR",
+      "entrada": 76672.4375,
+      "saida": 76235.22,
+      "lucro_bruto": -195.3,
+      "custos": 68.3031,
+      "lucro_liquido": -229.36,
+      "lucro": -229.36,
+      "resultado": "PERDEU",
+      "hora_abertura": "2026-05-26 04:31",
+      "hora_fecho": "2026-05-26 17:44",
+      "hora": "2026-05-26 17:44"
+    }
+  ],
   "estatisticas": {
-    "total_operacoes": 0,
+    "total_operacoes": 2,
     "ganhas": 0,
-    "perdidas": 0,
+    "perdidas": 2,
     "win_rate": 0.0,
-    "lucro_liquido_total": 0.0,
-    "custos_totais": 0.0,
+    "lucro_liquido_total": -438.51,
+    "custos_totais": 86.7987,
     "rentabilidade": 0.0
   }
 }

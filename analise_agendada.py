@@ -20,6 +20,8 @@ FICHEIRO_DASHBOARD= os.path.join(BASE_DIR, "dados_dashboard.json")
 SALDO_INICIAL     = 10000.0
 THRESHOLD_ENTRADA     = 60   # score >= 60 → entra
 THRESHOLD_CORRELACAO  = 80   # score >= 80 → entra mesmo com activo correlacionado aberto
+RSI_MIN_ENTRADA       = 35   # RSI mínimo para qualquer entrada (evita oversold extremo)
+RSI_MAX_ENTRADA       = 65   # RSI máximo para qualquer entrada (evita overbought extremo)
 CUSTO_OP          = 0.001    # 0.1% entrada + 0.1% saída
 SL_MULT           = 2.0      # Stop Loss  = 2× ATR diário
 TP_MULT           = 4.0      # Take Profit = 4× ATR diário (ratio 1:2)
@@ -236,6 +238,10 @@ def calcular_tendencia(ind):
             return "ALTA"
         if p < m50 and m50 < m100:
             return "BAIXA"
+        return "INDEFINIDA"  # MM100 disponível mas condições mistas — genuinamente indefinida
+    # MM100 também indisponível — último recurso: preço vs MM50
+    if not math.isnan(m50):
+        return "ALTA" if p > m50 else "BAIXA"
     return "INDEFINIDA"
 
 
@@ -246,7 +252,7 @@ def sessao_operacional(activo_cfg):
     h = datetime.now(timezone.utc).hour
     if 7 <= h < 12:
         return True, "LONDRA"
-    if 13 <= h < 18:
+    if 13 <= h < 21:
         return True, "NEW YORK"
     return False, f"FECHADO({h:02d}h)"
 
@@ -543,7 +549,7 @@ _SL_TP_ACTIVO = {
     "Ouro"     : (1.5, 3.0),
     "Petróleo" : (1.0, 2.0),
     "Prata"    : (1.0, 2.0),
-    "EUR/USD"  : (1.0, 1.5),
+    "EUR/USD"  : (1.0, 2.0),
     "S&P 500"  : (1.5, 2.5),
     "Nasdaq"   : (1.5, 2.5),
 }
@@ -561,14 +567,16 @@ def calcular_sl_tp(activo, preco, atr_diario, tipo):
     return stop_loss, take_profit
 
 
-def abrir_posicao(carteira, activo, tipo, preco, atr_d):
+def abrir_posicao(carteira, activo, tipo, preco, atr_d, permitir_correlacao=False):
     if len(carteira["posicoes_abertas"]) >= MAX_POSICOES:
         return carteira, False, "máximo de posições atingido"
 
     nomes_abertos = {p["activo"] for p in carteira["posicoes_abertas"]}
     for nome_ab in nomes_abertos:
         if activos_correlacionados(activo, nome_ab):
-            return carteira, False, f"correlacionado com {nome_ab}"
+            if not permitir_correlacao:
+                return carteira, False, f"correlacionado com {nome_ab}"
+            print(f"  ⚡ [{activo}] entra com correlação (par {nome_ab}) — threshold {THRESHOLD_CORRELACAO}% ✓")
 
     stop_loss, take_profit = calcular_sl_tp(activo, preco, atr_d, tipo)
 
@@ -740,6 +748,13 @@ def executar_ciclo():
         if em_cooldown(carteira, nome):
             acoes.append(f"REJEITADO {nome}: cooldown SL activo")
             continue
+        rsi = ind["rsi"]
+        if not (RSI_MIN_ENTRADA <= rsi <= RSI_MAX_ENTRADA):
+            acoes.append(
+                f"[REJEITADO] {nome}: RSI extremo {rsi:.0f} fora de "
+                f"[{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}] — aguarda normalização"
+            )
+            continue
         corr = next((n for n in nomes_posicoes if activos_correlacionados(nome, n)), None)
         entrada_com_correlacao = False
         if corr:
@@ -754,7 +769,10 @@ def executar_ciclo():
             )
             entrada_com_correlacao = True
 
-        carteira, aberta, motivo = abrir_posicao(carteira, nome, direcao, ind["preco"], ind["atr_d"])
+        carteira, aberta, motivo = abrir_posicao(
+            carteira, nome, direcao, ind["preco"], ind["atr_d"],
+            permitir_correlacao=entrada_com_correlacao,
+        )
         if aberta:
             nomes_posicoes.add(nome)
             if entrada_com_correlacao:
@@ -799,8 +817,9 @@ def main():
     print(f"\n{SEP}")
     print(f"  ROBOTRADING ESTRATÉGIA v3")
     print(f"  8 activos | Ciclo 15min | Score ≥{THRESHOLD_ENTRADA}% | Tendência obrigatória")
-    print(f"  SL=2×ATR-d | TP=4×ATR-d | Capital/op=2% | Cooldown={COOLDOWN_MIN}min após SL")
-    print(f"  Sessões: Londra 07-12 UTC | NY 13-18 UTC | Cripto 24/7")
+    print(f"  SL/TP por activo | Capital/op=2% | Cooldown={COOLDOWN_MIN}min após SL")
+    print(f"  RSI válido: [{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}] | Corr threshold: {THRESHOLD_CORRELACAO}%")
+    print(f"  Sessões: Londra 07-12 UTC | NY 13-21 UTC | Cripto 24/7")
     print(f"  {' | '.join(a['nome'] for a in ACTIVOS)}")
     print(f"{SEP}\n")
 
