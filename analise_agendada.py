@@ -18,7 +18,8 @@ BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
 FICHEIRO_CARTEIRA = os.path.join(BASE_DIR, "carteira.json")
 FICHEIRO_DASHBOARD= os.path.join(BASE_DIR, "dados_dashboard.json")
 SALDO_INICIAL     = 10000.0
-THRESHOLD_ENTRADA = 60       # score >= 60 → entra
+THRESHOLD_ENTRADA     = 60   # score >= 60 → entra
+THRESHOLD_CORRELACAO  = 80   # score >= 80 → entra mesmo com activo correlacionado aberto
 CUSTO_OP          = 0.001    # 0.1% entrada + 0.1% saída
 SL_MULT           = 2.0      # Stop Loss  = 2× ATR diário
 TP_MULT           = 4.0      # Take Profit = 4× ATR diário (ratio 1:2)
@@ -740,13 +741,29 @@ def executar_ciclo():
             acoes.append(f"REJEITADO {nome}: cooldown SL activo")
             continue
         corr = next((n for n in nomes_posicoes if activos_correlacionados(nome, n)), None)
+        entrada_com_correlacao = False
         if corr:
-            acoes.append(f"REJEITADO {nome}: correlacionado com {corr}")
-            continue
+            if score < THRESHOLD_CORRELACAO:
+                acoes.append(
+                    f"[REJEITADO] {nome}: correlacionado com {corr} "
+                    f"(score {score}% < {THRESHOLD_CORRELACAO}% exigido)"
+                )
+                continue
+            acoes.append(
+                f"[CORRELAÇÃO] {corr} já aberto → threshold {nome} sobe para {THRESHOLD_CORRELACAO}%"
+            )
+            entrada_com_correlacao = True
+
         carteira, aberta, motivo = abrir_posicao(carteira, nome, direcao, ind["preco"], ind["atr_d"])
         if aberta:
             nomes_posicoes.add(nome)
-            acoes.append(f"ENTROU {nome} {direcao} @ {ind['preco']:.4f}  score:{score}%")
+            if entrada_com_correlacao:
+                acoes.append(
+                    f"[ENTROU] {nome} {direcao} @ {ind['preco']:.4f}  "
+                    f"score:{score}% >= {THRESHOLD_CORRELACAO}% threshold correlação ✓"
+                )
+            else:
+                acoes.append(f"ENTROU {nome} {direcao} @ {ind['preco']:.4f}  score:{score}%")
         else:
             acoes.append(f"REJEITADO {nome}: {motivo}")
 
