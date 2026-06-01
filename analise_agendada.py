@@ -11,6 +11,12 @@ from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 
+try:
+    import psycopg2
+    PSYCOPG2_OK = True
+except ImportError:
+    PSYCOPG2_OK = False
+
 warnings.filterwarnings("ignore")
 
 # ─── CONFIGURAÇÃO ─────────────────────────────────────────────────────────────
@@ -178,26 +184,123 @@ def carteira_vazia():
     }
 
 
+def _normalizar_carteira(c):
+    """Garante compatibilidade de campos após carregar de qualquer fonte."""
+    if "posicao_aberta" in c:
+        pos_antiga = c.pop("posicao_aberta")
+        if pos_antiga and "posicoes_abertas" not in c:
+            c["posicoes_abertas"] = [pos_antiga]
+    c.setdefault("posicoes_abertas", [])
+    c.setdefault("custos_totais", 0.0)
+    c.setdefault("historico", [])
+    c.setdefault("cooldowns", {})
+    c.setdefault("estatisticas", carteira_vazia()["estatisticas"])
+    return c
+
+
 def carregar_carteira():
+    # 1ª opção: base de dados PostgreSQL (sobrevive a deploys)
+    c_db = _carregar_db()
+    if c_db is not None:
+        return _normalizar_carteira(c_db)
+    # Fallback: ficheiro JSON local
     if os.path.exists(FICHEIRO_CARTEIRA):
         with open(FICHEIRO_CARTEIRA, "r") as f:
             c = json.load(f)
-        if "posicao_aberta" in c:
-            pos_antiga = c.pop("posicao_aberta")
-            if pos_antiga and "posicoes_abertas" not in c:
-                c["posicoes_abertas"] = [pos_antiga]
-        c.setdefault("posicoes_abertas", [])
-        c.setdefault("custos_totais", 0.0)
-        c.setdefault("historico", [])
-        c.setdefault("cooldowns", {})
-        c.setdefault("estatisticas", carteira_vazia()["estatisticas"])
-        return c
+        return _normalizar_carteira(c)
     return carteira_vazia()
 
 
 def guardar_carteira(carteira):
-    with open(FICHEIRO_CARTEIRA, "w") as f:
+    _guardar_db(carteira)                                    # persistência primária
+    with open(FICHEIRO_CARTEIRA, "w") as f:                  # backup local (fallback)
         json.dump(carteira, f, ensure_ascii=False, indent=2)
+
+
+# ─── POSTGRESQL ───────────────────────────────────────────────────────────────
+def _db_conn():
+    """Retorna conexão psycopg2 ou None se DB indisponível."""
+    url = os.environ.get("DATABASE_URL")
+    if not url or not PSYCOPG2_OK:
+        return None
+    try:
+        return psycopg2.connect(url, connect_timeout=8)
+    except Exception as e:
+        print(f"  ⚠ DB: ligação falhou ({e})")
+        return None
+
+
+def _init_db():
+    """Cria tabela se não existir e semeia com carteira.json se vazia."""
+    conn = _db_conn()
+    if not conn:
+        print("  ⚠ PostgreSQL não disponível — a usar carteira.json como fallback")
+        return
+    try:
+        with conn:
+            conn.cursor().execute("""
+                CREATE TABLE IF NOT EXISTS carteira_estado (
+                    id  INTEGER PRIMARY KEY DEFAULT 1,
+                    dados JSONB  NOT NULL,
+                    ts  TIMESTAMPTZ DEFAULT NOW(),
+                    CONSTRAINT single_row CHECK (id = 1)
+                )
+            """)
+        # Semeia DB com JSON local se ainda estiver vazia
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM carteira_estado")
+            if cur.fetchone()[0] == 0 and os.path.exists(FICHEIRO_CARTEIRA):
+                with open(FICHEIRO_CARTEIRA, "r") as f:
+                    dados_locais = json.load(f)
+                cur.execute(
+                    "INSERT INTO carteira_estado (id, dados) VALUES (1, %s::jsonb)",
+                    (json.dumps(dados_locais, ensure_ascii=False),),
+                )
+                print("  ✓ DB semeada com carteira.json local")
+        print("  ✓ PostgreSQL ligado — carteira persistente entre deploys")
+    except Exception as e:
+        print(f"  ⚠ DB init: {e}")
+    finally:
+        conn.close()
+
+
+def _carregar_db():
+    """Lê carteira da base de dados. Retorna dict ou None."""
+    conn = _db_conn()
+    if not conn:
+        return None
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT dados FROM carteira_estado WHERE id = 1")
+            row = cur.fetchone()
+            return row[0] if row else None   # psycopg2 converte JSONB → dict
+    except Exception as e:
+        print(f"  ⚠ DB leitura: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def _guardar_db(carteira):
+    """Grava carteira na base de dados (UPSERT)."""
+    conn = _db_conn()
+    if not conn:
+        return
+    try:
+        with conn:
+            conn.cursor().execute("""
+                INSERT INTO carteira_estado (id, dados, ts)
+                VALUES (1, %s::jsonb, NOW())
+                ON CONFLICT (id) DO UPDATE
+                    SET dados = EXCLUDED.dados,
+                        ts    = NOW()
+            """, (json.dumps(carteira, ensure_ascii=False),))
+    except Exception as e:
+        print(f"  ⚠ DB escrita: {e}")
+    finally:
+        conn.close()
 
 
 def atualizar_estatisticas(carteira):
@@ -845,6 +948,7 @@ def executar_ciclo():
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     threading.Thread(target=iniciar_servidor_http, daemon=True).start()
+    _init_db()   # cria tabela + semeia com JSON local se DB estiver vazia
     print(f"\n{SEP}")
     print(f"  ROBOTRADING ESTRATÉGIA v3")
     print(f"  8 activos | Ciclo 15min | Score ≥{THRESHOLD_ENTRADA}% | Tendência obrigatória")
