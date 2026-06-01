@@ -393,7 +393,7 @@ def analisar_noticias(noticias, activo_cfg, tendencia):
 
 def calcular_score(ind, tendencia, sentimento):
     """
-    100 pontos máximo:
+    100 pontos máximo — retorna (score: int, breakdown: dict):
       RSI favorável      +20
       MACD hist          +20
       Stochastic         +15
@@ -401,64 +401,42 @@ def calcular_score(ind, tendencia, sentimento):
       Bollinger          +15
       Notícias           +15
     """
-    score   = 0
+    bd       = {"rsi": 0, "macd": 0, "stoch": 0, "volume": 0, "bollinger": 0, "noticias": 0}
     bb_range = ind["bb_up"] - ind["bb_dn"]
 
     if tendencia == "ALTA":
-        # RSI: não sobrecomprado (tem espaço para subir)
         if ind["rsi"] < 55:
-            score += 20
-
-        # MACD: histograma positivo ou a recuperar
+            bd["rsi"] = 20
         if ind["macd_hist"] > 0 or ind["macd_hist"] > ind["macd_hist_prev"]:
-            score += 20
-
-        # Stochastic: a virar de zona de sobrevenda
+            bd["macd"] = 20
         if ind["stoch_k"] < 50 and ind["stoch_k"] > ind["stoch_k_prev"]:
-            score += 15
-
-        # Volume
+            bd["stoch"] = 15
         if ind["vol_ratio"] >= 0.7:
-            score += 15
-
-        # Bollinger: preço no terço inferior (toca banda inferior)
+            bd["volume"] = 15
         if bb_range > 0 and (ind["preco"] - ind["bb_dn"]) / bb_range <= 0.35:
-            score += 15
-
-        # Notícias
+            bd["bollinger"] = 15
         if sentimento == "POSITIVO":
-            score += 15
+            bd["noticias"] = 15
         elif sentimento == "NEUTRO":
-            score += 7
-
+            bd["noticias"] = 7
     else:  # BAIXA
-        # RSI: não sobrevendido (tem espaço para descer)
         if ind["rsi"] > 45:
-            score += 20
-
-        # MACD: histograma negativo ou a deteriorar
+            bd["rsi"] = 20
         if ind["macd_hist"] < 0 or ind["macd_hist"] < ind["macd_hist_prev"]:
-            score += 20
-
-        # Stochastic: a virar de zona de sobrecompra
+            bd["macd"] = 20
         if ind["stoch_k"] > 50 and ind["stoch_k"] < ind["stoch_k_prev"]:
-            score += 15
-
-        # Volume
+            bd["stoch"] = 15
         if ind["vol_ratio"] >= 0.7:
-            score += 15
-
-        # Bollinger: preço no terço superior (toca banda superior)
+            bd["volume"] = 15
         if bb_range > 0 and (ind["preco"] - ind["bb_dn"]) / bb_range >= 0.65:
-            score += 15
-
-        # Notícias
+            bd["bollinger"] = 15
         if sentimento == "NEGATIVO":
-            score += 15
+            bd["noticias"] = 15
         elif sentimento == "NEUTRO":
-            score += 7
+            bd["noticias"] = 7
 
-    return min(score, 100)
+    score = min(sum(bd.values()), 100)
+    return score, bd
 
 
 # ─── GESTÃO DE POSIÇÕES ───────────────────────────────────────────────────────
@@ -646,10 +624,11 @@ def executar_ciclo():
     print(f"=== CICLO 15MIN — {hora_utc} ===")
     print(SEP)
 
-    carteira       = carregar_carteira()
-    precos_atuais  = {}
-    resultados     = []   # (cfg, ind, tend, score, direcao, pode_operar, sessao_nome)
-    analises_novos = []
+    carteira         = carregar_carteira()
+    precos_atuais    = {}
+    resultados       = []
+    analises_novos   = []
+    analise_por_nome = {}   # nome -> índice em analises_novos (para actualizar decisao_final)
 
     for cfg in ACTIVOS:
         nome   = cfg["nome"]
@@ -687,11 +666,10 @@ def executar_ciclo():
 
         # Score calculado sempre — para INDEFINIDA usa direcção de curto prazo (só display)
         if direcao:
-            score = calcular_score(ind, tend, sentimento)
+            score, breakdown = calcular_score(ind, tend, sentimento)
         else:
-            # Indica direcção sugerida pelos indicadores de curto prazo
             dir_hint = "ALTA" if ind["macd_hist"] > ind["macd_hist_prev"] else "BAIXA"
-            score = calcular_score(ind, dir_hint, "NEUTRO")
+            score, breakdown = calcular_score(ind, dir_hint, "NEUTRO")
 
         # Motivos de skip para o log
         skips = []
@@ -705,7 +683,27 @@ def executar_ciclo():
         print(f"${ind['preco']:<12.4f} | {tend:<10} | {score:>3}% | {sessao:<14} | "
               f"{(direcao or 'AGUARDAR'):<8}{flag}{skip_str}")
 
+        # Decisão preliminar (actualizada no loop de execução se for candidato)
+        if ja_tem_posicao:
+            decisao_parcial = "AGUARDOU — posição já aberta"
+        elif not direcao:
+            decisao_parcial = "AGUARDOU — tendência INDEFINIDA"
+        elif not pode_operar:
+            decisao_parcial = f"AGUARDOU — fora de sessão ({sessao})"
+        elif cooldown_ativo:
+            decisao_parcial = "AGUARDOU — cooldown SL activo"
+        elif not (RSI_MIN_ENTRADA <= ind["rsi"] <= RSI_MAX_ENTRADA):
+            decisao_parcial = (
+                f"REJEITADO — RSI {ind['rsi']:.1f} fora de "
+                f"[{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}]"
+            )
+        elif score < THRESHOLD_ENTRADA:
+            decisao_parcial = f"AGUARDOU — score {score}% < {THRESHOLD_ENTRADA}%"
+        else:
+            decisao_parcial = f"CANDIDATO — score {score}% ≥ {THRESHOLD_ENTRADA}%"
+
         resultados.append((cfg, ind, tend, score, direcao, pode_entrar, sessao, sentimento))
+        analise_por_nome[nome] = len(analises_novos)
         analises_novos.append({
             "hora":                datetime.now().strftime("%Y-%m-%d %H:%M"),
             "activo":              nome,
@@ -722,6 +720,15 @@ def executar_ciclo():
             "sentimento_noticias": sentimento,
             "factores_positivos":  [],
             "factores_negativos":  [],
+            "score_breakdown":     {**breakdown, "sessao": 0},
+            "filtros_aplicados": {
+                "tendencia":  tend,
+                "rsi_ok":     RSI_MIN_ENTRADA <= ind["rsi"] <= RSI_MAX_ENTRADA,
+                "sessao_ok":  pode_operar,
+                "score_ok":   score >= THRESHOLD_ENTRADA,
+                "correlacao": "livre",
+            },
+            "decisao_final":       decisao_parcial,
         })
 
     # Verificar SL/TP nas posições abertas
@@ -754,25 +761,43 @@ def executar_ciclo():
                 f"[REJEITADO] {nome}: RSI extremo {rsi:.0f} fora de "
                 f"[{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}] — aguarda normalização"
             )
+            idx = analise_por_nome.get(nome)
+            if idx is not None:
+                analises_novos[idx]["decisao_final"] = (
+                    f"REJEITADO — RSI extremo {rsi:.1f} fora de "
+                    f"[{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}]"
+                )
             continue
         corr = next((n for n in nomes_posicoes if activos_correlacionados(nome, n)), None)
         entrada_com_correlacao = False
         if corr:
+            idx_corr = analise_por_nome.get(nome)
             if score < THRESHOLD_CORRELACAO:
                 acoes.append(
                     f"[REJEITADO] {nome}: correlacionado com {corr} "
                     f"(score {score}% < {THRESHOLD_CORRELACAO}% exigido)"
                 )
+                if idx_corr is not None:
+                    analises_novos[idx_corr]["filtros_aplicados"]["correlacao"] = "bloqueado"
+                    analises_novos[idx_corr]["decisao_final"] = (
+                        f"REJEITADO — correlacionado com {corr} "
+                        f"(score {score}% < {THRESHOLD_CORRELACAO}%)"
+                    )
                 continue
             acoes.append(
                 f"[CORRELAÇÃO] {corr} já aberto → threshold {nome} sobe para {THRESHOLD_CORRELACAO}%"
             )
             entrada_com_correlacao = True
+            if idx_corr is not None:
+                analises_novos[idx_corr]["filtros_aplicados"]["correlacao"] = (
+                    f"threshold {THRESHOLD_CORRELACAO}%"
+                )
 
         carteira, aberta, motivo = abrir_posicao(
             carteira, nome, direcao, ind["preco"], ind["atr_d"],
             permitir_correlacao=entrada_com_correlacao,
         )
+        idx_ab = analise_por_nome.get(nome)
         if aberta:
             nomes_posicoes.add(nome)
             if entrada_com_correlacao:
@@ -782,8 +807,14 @@ def executar_ciclo():
                 )
             else:
                 acoes.append(f"ENTROU {nome} {direcao} @ {ind['preco']:.4f}  score:{score}%")
+            if idx_ab is not None:
+                analises_novos[idx_ab]["decisao_final"] = (
+                    f"ENTROU {direcao} @ {ind['preco']:.4f} — score {score}%"
+                )
         else:
             acoes.append(f"REJEITADO {nome}: {motivo}")
+            if idx_ab is not None:
+                analises_novos[idx_ab]["decisao_final"] = f"REJEITADO — {motivo}"
 
     if not acoes:
         if candidatos:

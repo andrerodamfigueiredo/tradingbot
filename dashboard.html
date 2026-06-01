@@ -232,9 +232,8 @@ header {
   border-radius: 14px;
   padding: 18px 20px;
   cursor: pointer;
-  transition: all .2s ease;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
   position: relative;
-  overflow: hidden;
 }
 .activo-card:hover {
   border-color: var(--border2);
@@ -401,6 +400,67 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
 
 /* ── PRICE MONO ── */
 .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+
+/* ── DETAIL PANEL ── */
+.ac-expand {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 0 0; margin-top: 10px;
+  border-top: 1px solid var(--border);
+  cursor: pointer; background: none;
+  border-left: 0; border-right: 0; border-bottom: 0;
+  width: 100%; font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 500; color: var(--muted);
+  transition: color .15s;
+}
+.ac-expand:hover { color: var(--blue); }
+.ac-chevron { display: inline-block; transition: transform .28s ease; font-size: 10px; }
+.ac-chevron.open { transform: rotate(180deg); }
+
+.activo-detail { max-height: 0; overflow: hidden; transition: max-height .38s ease; }
+.activo-detail.open { max-height: 800px; }
+
+.detail-inner {
+  padding: 14px 2px 4px;
+  display: flex; flex-direction: column; gap: 14px;
+  border-top: 1px solid var(--border); margin-top: 12px;
+}
+.detail-stitle {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  letter-spacing: .8px; text-transform: uppercase; margin-bottom: 8px;
+}
+
+/* Score breakdown bars */
+.sb-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.sb-label   { width: 68px; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.sb-bar     { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; min-width: 0; }
+.sb-fill    { height: 100%; border-radius: 3px; transition: width .5s ease .08s; }
+.sb-pts     { width: 28px; text-align: right; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.sb-desc    { font-size: 10px; color: var(--muted); min-width: 88px; flex-shrink: 0; }
+.sb-total   {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 7px; border-top: 1px solid var(--border); margin-top: 2px;
+}
+.sb-total-lbl { font-size: 11px; font-weight: 600; color: var(--text); }
+.sb-total-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Filter rows */
+.filt-row  { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 2px 0; }
+.filt-icon { font-size: 13px; width: 18px; text-align: center; flex-shrink: 0; }
+.filt-label { color: var(--muted); width: 88px; flex-shrink: 0; font-size: 11px; }
+.filt-val   { font-weight: 600; font-size: 11px; }
+.decisao-pill {
+  display: inline-flex; align-items: center;
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; margin-top: 6px;
+}
+.dp-entrou   { background: var(--green-dim); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+.dp-aguardou { background: rgba(100,116,139,.1); color: var(--muted); border: 1px solid rgba(100,116,139,.25); }
+.dp-rejeitado{ background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+.dp-candidato{ background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(59,130,246,.3); }
+
+/* Reasoning */
+.detail-rac { font-size: 12px; color: var(--muted); line-height: 1.65; }
+.no-detail  { font-size: 12px; color: var(--muted2); text-align: center; padding: 10px 0; }
 </style>
 </head>
 <body>
@@ -626,6 +686,7 @@ const SALDO_INICIAL = 10000;
 let chartInst    = null;
 let activoFiltro = 'TODOS';
 let dadosGlobais = null;
+let ultimaAnalise = {};
 
 // ── RELÓGIO ───────────────────────────────────────────────────────────────────
 function tickClock() {
@@ -728,14 +789,15 @@ function renderCarteira(c) {
 
 // ── RESUMO ACTIVOS (TODOS) ────────────────────────────────────────────────────
 function renderSumario(analises) {
-  const nomes  = Object.keys(ACTIVO_CORES);
-  const ultima = {};
-  [...analises].forEach(a => { ultima[a.activo] = a; });
+  const nomes = Object.keys(ACTIVO_CORES);
+  ultimaAnalise = {};
+  [...analises].forEach(a => { ultimaAnalise[a.activo] = a; });
 
   const grid = document.getElementById('activos-grid');
   grid.innerHTML = nomes.map(nome => {
-    const a   = ultima[nome];
+    const a   = ultimaAnalise[nome];
     const cor = ACTIVO_CORES[nome];
+    const nid = nome.replace(/[^a-z0-9]/gi, '_');
     if (!a) return `
       <div class="activo-card" style="--accent-color:${cor}" onclick="filtrar('${nome}')">
         <div class="ac-header">
@@ -743,6 +805,10 @@ function renderSumario(analises) {
         </div>
         <div class="ac-preco" style="color:var(--muted)">—</div>
         <div class="ac-footer"><span style="color:var(--muted);font-size:11px">Sem dados</span></div>
+        <button class="ac-expand" onclick="event.stopPropagation();toggleDetail('${nid}')">
+          Ver análise <span class="ac-chevron" id="chev-${nid}">▼</span>
+        </button>
+        <div class="activo-detail" id="detail-${nid}"></div>
       </div>`;
 
     const cls      = a.decisao === 'COMPRAR' ? 'comprar' : a.decisao === 'VENDER' ? 'vender' : 'aguardar';
@@ -765,6 +831,10 @@ function renderSumario(analises) {
           <span class="ac-score" style="color:${scoreCor}">${scoreVal}%</span>
           <span class="ac-rsi">RSI ${a.rsi || '—'}</span>
         </div>
+        <button class="ac-expand" onclick="event.stopPropagation();toggleDetail('${nid}','${nome}')">
+          Ver análise <span class="ac-chevron" id="chev-${nid}">▼</span>
+        </button>
+        <div class="activo-detail" id="detail-${nid}"></div>
       </div>`;
   }).join('');
 }
@@ -775,6 +845,125 @@ function filtrar(nome) {
   });
   activoFiltro = nome;
   if (dadosGlobais) renderTudo(dadosGlobais);
+}
+
+// ── PAINEL DETALHES ───────────────────────────────────────────────────────────
+function toggleDetail(nid, nomeActivo) {
+  const panel = document.getElementById('detail-' + nid);
+  const chev  = document.getElementById('chev-' + nid);
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  if (chev) chev.classList.toggle('open', isOpen);
+  if (isOpen && nomeActivo) renderDetail(nid, nomeActivo);
+}
+
+function renderDetail(nid, nomeActivo) {
+  const panel = document.getElementById('detail-' + nid);
+  if (!panel) return;
+  const a = ultimaAnalise[nomeActivo];
+  if (!a) {
+    panel.innerHTML = '<div class="detail-inner"><p class="no-detail">Sem dados — aguarda próximo ciclo.</p></div>';
+    return;
+  }
+
+  // ── 1. Score breakdown ────────────────────────────────────────────────────
+  const bd = a.score_breakdown;
+  let bdHTML = '';
+  if (bd) {
+    const componentes = [
+      { lbl: 'RSI',       key: 'rsi',       max: 20 },
+      { lbl: 'MACD',      key: 'macd',      max: 20 },
+      { lbl: 'Stoch.',    key: 'stoch',     max: 15 },
+      { lbl: 'Volume',    key: 'volume',    max: 15 },
+      { lbl: 'Bollinger', key: 'bollinger', max: 15 },
+      { lbl: 'Notícias',  key: 'noticias',  max: 15 },
+    ];
+    const tend = a.tendencia || 'INDEFINIDA';
+    const descs = {
+      rsi:       pts => pts ? (tend === 'ALTA' ? 'espaço p/ subir' : 'espaço p/ descer') : (tend === 'ALTA' ? 'sobrecomprado' : 'sobrevendido'),
+      macd:      pts => pts ? (tend === 'ALTA' ? 'positivo/a subir' : 'negativo/a cair') : 'sem confirmação',
+      stoch:     pts => pts ? (tend === 'ALTA' ? 'virando alta' : 'virando baixa') : 'sem confirmação',
+      volume:    pts => pts ? 'acima da média' : 'volume fraco',
+      bollinger: pts => pts ? (tend === 'ALTA' ? 'próx. banda inf.' : 'próx. banda sup.') : 'zona neutra',
+      noticias:  pts => pts === 15 ? 'positivo' : pts === 7 ? 'neutro (+7)' : 'sem impulso',
+    };
+    const total = componentes.reduce((s, c) => s + (bd[c.key] || 0), 0);
+    const scoreCor = total >= 60 ? 'var(--green)' : total >= 45 ? 'var(--yellow)' : 'var(--muted)';
+    const rows = componentes.map(c => {
+      const pts  = bd[c.key] || 0;
+      const pct  = Math.round((pts / c.max) * 100);
+      const clr  = pts > 0 ? 'var(--blue)' : '#374151';
+      const ptsCor = pts > 0 ? 'var(--green)' : 'var(--muted2)';
+      return `<div class="sb-row">
+        <span class="sb-label">${c.lbl}</span>
+        <div class="sb-bar"><div class="sb-fill" style="width:${pct}%;background:${clr}"></div></div>
+        <span class="sb-pts" style="color:${ptsCor}">${pts > 0 ? '+' : ''}${pts}</span>
+        <span class="sb-desc">${descs[c.key](pts)}</span>
+      </div>`;
+    }).join('');
+    bdHTML = `<div>
+      <div class="detail-stitle">Score Detalhado</div>
+      ${rows}
+      <div class="sb-total">
+        <span class="sb-total-lbl">TOTAL</span>
+        <span class="sb-total-val" style="color:${scoreCor}">${total}/100 = ${total}%</span>
+      </div>
+    </div>`;
+  } else {
+    bdHTML = `<div><div class="detail-stitle">Score Detalhado</div>
+      <p class="no-detail">Não disponível — aguarda próximo ciclo para dados completos.</p></div>`;
+  }
+
+  // ── 2. Filtros aplicados ──────────────────────────────────────────────────
+  const fi = a.filtros_aplicados;
+  const df = a.decisao_final || '—';
+  let filtHTML = '';
+  if (fi) {
+    const ico = ok => ok ? '✅' : '❌';
+    const tendIco = fi.tendencia === 'INDEFINIDA' ? '⚠️' : (fi.tendencia === 'ALTA' || fi.tendencia === 'BAIXA') ? '✅' : '❌';
+    const corrIco = fi.correlacao === 'bloqueado' ? '❌' : (fi.correlacao || '').includes('threshold') ? '⚠️' : '✅';
+    const filtros = [
+      { icon: tendIco,          label: 'Tendência',  val: fi.tendencia || '—' },
+      { icon: ico(fi.rsi_ok),   label: 'RSI [35-65]', val: fi.rsi_ok ? `${a.rsi} ✓` : `${a.rsi} ✗ fora do range` },
+      { icon: ico(fi.sessao_ok),label: 'Sessão',      val: fi.sessao_ok ? (a.sessao || 'activa') : `${a.sessao || 'fechada'}` },
+      { icon: ico(fi.score_ok), label: 'Score ≥ 60%', val: fi.score_ok ? `${a.score}% ✓` : `${a.score}% — insuficiente` },
+      { icon: corrIco,          label: 'Correlação',  val: fi.correlacao || 'livre' },
+    ];
+    const fRows = filtros.map(f =>
+      `<div class="filt-row">
+        <span class="filt-icon">${f.icon}</span>
+        <span class="filt-label">${f.label}:</span>
+        <span class="filt-val">${f.val}</span>
+      </div>`
+    ).join('');
+    const dfLower = df.toLowerCase();
+    const dpCls = dfLower.startsWith('entrou') ? 'dp-entrou'
+                : dfLower.startsWith('rejeitado') ? 'dp-rejeitado'
+                : dfLower.startsWith('candidato') ? 'dp-candidato'
+                : 'dp-aguardou';
+    filtHTML = `<div>
+      <div class="detail-stitle">Filtros Aplicados</div>
+      ${fRows}
+      <div style="margin-top:8px"><span class="decisao-pill ${dpCls}">${df}</span></div>
+    </div>`;
+  } else {
+    const dfLower = df.toLowerCase();
+    const dpCls = dfLower.startsWith('entrou') ? 'dp-entrou'
+                : dfLower.startsWith('rejeitado') ? 'dp-rejeitado'
+                : 'dp-aguardou';
+    filtHTML = `<div>
+      <div class="detail-stitle">Decisão Final</div>
+      <div style="margin-top:4px"><span class="decisao-pill ${dpCls}">${df}</span></div>
+    </div>`;
+  }
+
+  // ── 3. Raciocínio IA ──────────────────────────────────────────────────────
+  const rac = a.raciocinio
+    ? `<div class="detail-rac">${a.raciocinio}</div>`
+    : `<p class="no-detail">Sem análise de notícias neste ciclo<br><span style="font-size:10px">(IA só é chamada quando o activo é candidato a entrar)</span></p>`;
+  const racHTML = `<div><div class="detail-stitle">Raciocínio IA</div>${rac}</div>`;
+
+  panel.innerHTML = `<div class="detail-inner">${bdHTML}${filtHTML}${racHTML}</div>`;
 }
 
 // ── TABELA ANÁLISES ───────────────────────────────────────────────────────────
