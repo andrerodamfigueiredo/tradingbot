@@ -1,7 +1,19 @@
 {
-  "saldo": 10000.0,
-  "custos_totais": 0.0,
-  "posicoes_abertas": [],
+  "saldo": 9993.746588457654,
+  "custos_totais": 6.253411542346802,
+  "posicoes_abertas": [
+    {
+      "activo": "Ethereum",
+      "tipo": "VENDER",
+      "preco_entrada": 1992.42,
+      "stop_loss": 2056.1427,
+      "take_profit": 1864.9747,
+      "contratos": 3.138601,
+      "atr_d": 63.7227,
+      "hora_abertura": "2026-06-01 21:28",
+      "custo_entrada": 6.2534
+    }
+  ],
   "cooldowns": {},
   "historico": [
     {
@@ -39,7 +51,7 @@
     "perdidas": 2,
     "win_rate": 0.0,
     "lucro_liquido_total": -438.51,
-    "custos_totais": 86.7987,
-    "rentabilidade": 0.0
+    "custos_totais": 6.25,
+    "rentabilidade": -0.06
   }
 }
