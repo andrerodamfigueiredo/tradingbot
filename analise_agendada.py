@@ -26,13 +26,13 @@ FICHEIRO_DASHBOARD= os.path.join(BASE_DIR, "dados_dashboard.json")
 SALDO_INICIAL     = 10000.0
 THRESHOLD_ENTRADA     = 60   # score >= 60 → entra
 THRESHOLD_CORRELACAO  = 80   # score >= 80 → entra mesmo com activo correlacionado aberto
-RSI_MIN_ENTRADA       = 35   # RSI mínimo para qualquer entrada (evita oversold extremo)
-RSI_MAX_ENTRADA       = 65   # RSI máximo para qualquer entrada (evita overbought extremo)
+RSI_MIN_ENTRADA       = 25   # RSI mínimo para qualquer entrada (evita oversold extremo)
+RSI_MAX_ENTRADA       = 75   # RSI máximo para qualquer entrada (evita overbought extremo)
 CUSTO_OP          = 0.001    # 0.1% entrada + 0.1% saída
 SL_MULT           = 2.0      # Stop Loss  = 2× ATR diário
 TP_MULT           = 4.0      # Take Profit = 4× ATR diário (ratio 1:2)
 CAPITAL_POR_OP    = 0.02     # 2% do saldo por operação
-MAX_POSICOES      = 2
+MAX_POSICOES      = 3
 PORT              = int(os.environ.get("PORT", 8080))
 SEP               = "=" * 60
 COOLDOWN_MIN      = 30       # minutos de espera após SL
