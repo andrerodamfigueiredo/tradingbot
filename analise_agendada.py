@@ -195,6 +195,8 @@ def _normalizar_carteira(c):
     c.setdefault("historico", [])
     c.setdefault("cooldowns", {})
     c.setdefault("estatisticas", carteira_vazia()["estatisticas"])
+    for pos in c["posicoes_abertas"]:
+        pos.setdefault("melhor_preco", pos["preco_entrada"])
     return c
 
 
@@ -556,6 +558,39 @@ def verificar_posicoes(carteira, precos):
             manter.append(pos)
             continue
 
+        # ── TRAILING STOP: actualiza melhor_preco e SL ────────────────────
+        trailing_mult = _TRAILING_MULT.get(nome, 1.0)
+        atr           = pos.get("atr_d", 0)
+        melhor        = pos.get("melhor_preco", pos["preco_entrada"])
+
+        if pos["tipo"] == "VENDER":
+            if preco < melhor:
+                pos["melhor_preco"] = round(preco, 4)
+                melhor = preco
+            novo_sl = round(melhor + atr * trailing_mult, 4)
+            if novo_sl < pos["stop_loss"]:
+                sl_anterior = pos["stop_loss"]
+                pos["stop_loss"] = novo_sl
+                lp = (pos["preco_entrada"] - novo_sl) * pos["contratos"]
+                sinal_lp = "+" if lp >= 0 else ""
+                print(f"  [TRAILING] {nome} VENDER | Melhor: ${melhor:.4f} | "
+                      f"SL: ${sl_anterior:.4f} → ${novo_sl:.4f} | "
+                      f"Lucro protegido: {sinal_lp}${lp:.2f}")
+        else:  # COMPRAR
+            if preco > melhor:
+                pos["melhor_preco"] = round(preco, 4)
+                melhor = preco
+            novo_sl = round(melhor - atr * trailing_mult, 4)
+            if novo_sl > pos["stop_loss"]:
+                sl_anterior = pos["stop_loss"]
+                pos["stop_loss"] = novo_sl
+                lp = (novo_sl - pos["preco_entrada"]) * pos["contratos"]
+                sinal_lp = "+" if lp >= 0 else ""
+                print(f"  [TRAILING] {nome} COMPRAR | Melhor: ${melhor:.4f} | "
+                      f"SL: ${sl_anterior:.4f} → ${novo_sl:.4f} | "
+                      f"Lucro protegido: {sinal_lp}${lp:.2f}")
+
+        # ── VERIFICAR FECHO ───────────────────────────────────────────────
         resultado   = None
         lucro_bruto = 0.0
         preco_fecho = preco
@@ -568,7 +603,7 @@ def verificar_posicoes(carteira, precos):
             elif preco <= pos["stop_loss"]:
                 lucro_bruto = (pos["stop_loss"] - pos["preco_entrada"]) * pos["contratos"]
                 preco_fecho = pos["stop_loss"]
-                resultado   = "PERDEU"
+                resultado   = "GANHOU" if lucro_bruto >= 0 else "PERDEU"
         elif pos["tipo"] == "VENDER":
             if preco <= pos["take_profit"]:
                 lucro_bruto = (pos["preco_entrada"] - pos["take_profit"]) * pos["contratos"]
@@ -577,7 +612,7 @@ def verificar_posicoes(carteira, precos):
             elif preco >= pos["stop_loss"]:
                 lucro_bruto = (pos["preco_entrada"] - pos["stop_loss"]) * pos["contratos"]
                 preco_fecho = pos["stop_loss"]
-                resultado   = "PERDEU"
+                resultado   = "GANHOU" if lucro_bruto >= 0 else "PERDEU"
 
         if resultado:
             custo_fecho   = preco_fecho * pos["contratos"] * CUSTO_OP
@@ -604,7 +639,6 @@ def verificar_posicoes(carteira, precos):
             if resultado == "PERDEU":
                 fechados_sl.append(nome)
         else:
-            # Mostrar PnL flutuante
             if pos["tipo"] == "COMPRAR":
                 pnl = (preco - pos["preco_entrada"]) * pos["contratos"]
             else:
@@ -633,6 +667,17 @@ _SL_TP_ACTIVO = {
     "EUR/USD"  : (1.0, 2.0),
     "S&P 500"  : (1.5, 2.5),
     "Nasdaq"   : (1.5, 2.5),
+}
+
+_TRAILING_MULT = {
+    "Bitcoin"  : 1.0,
+    "Ethereum" : 1.0,
+    "Ouro"     : 0.8,
+    "Petróleo" : 1.0,
+    "Prata"    : 0.8,
+    "EUR/USD"  : 0.5,
+    "S&P 500"  : 0.8,
+    "Nasdaq"   : 0.8,
 }
 
 
@@ -679,6 +724,7 @@ def abrir_posicao(carteira, activo, tipo, preco, atr_d, permitir_correlacao=Fals
         "atr_d":         round(atr_d, 4),
         "hora_abertura": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "custo_entrada": round(custo_entrada, 4),
+        "melhor_preco":  round(preco, 4),
     })
     print(f"  ★ ABERTA [{activo}] {tipo} @ {preco:.4f} | "
           f"SL:{stop_loss:.4f} TP:{take_profit:.4f} | ATR-d:{atr_d:.4f} Custo:${custo_entrada:.2f}")
@@ -697,10 +743,22 @@ def atualizar_dashboard(carteira, novas_analises=None):
 
     stats    = carteira.get("estatisticas", {})
     posicoes = carteira.get("posicoes_abertas", [])
+
+    posicoes_dash = []
+    for pos in posicoes:
+        p = dict(pos)
+        if pos["tipo"] == "VENDER":
+            lp = (pos["preco_entrada"] - pos["stop_loss"]) * pos["contratos"]
+        else:
+            lp = (pos["stop_loss"] - pos["preco_entrada"]) * pos["contratos"]
+        p["sl_atual"]        = pos["stop_loss"]
+        p["lucro_protegido"] = round(lp, 2)
+        posicoes_dash.append(p)
+
     dados["carteira"] = {
         "saldo":              carteira["saldo"],
         "custos_totais":      carteira.get("custos_totais", 0),
-        "posicoes_abertas":   posicoes,
+        "posicoes_abertas":   posicoes_dash,
         "estatisticas":       stats,
         "historico":          carteira.get("historico", []),
         "rentabilidade":      stats.get("rentabilidade", 0),
@@ -710,7 +768,7 @@ def atualizar_dashboard(carteira, novas_analises=None):
         "lucro_total":        stats.get("lucro_liquido_total", 0),
         "win_rate":           stats.get("win_rate", 0),
     }
-    dados["posicao_aberta"] = posicoes[0] if posicoes else None
+    dados["posicao_aberta"] = posicoes_dash[0] if posicoes_dash else None
 
     if novas_analises:
         dados["analises"].extend(novas_analises)
