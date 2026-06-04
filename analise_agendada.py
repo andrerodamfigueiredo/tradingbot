@@ -24,15 +24,17 @@ BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
 FICHEIRO_CARTEIRA = os.path.join(BASE_DIR, "carteira.json")
 FICHEIRO_DASHBOARD= os.path.join(BASE_DIR, "dados_dashboard.json")
 SALDO_INICIAL     = 10000.0
-THRESHOLD_ENTRADA     = 60   # score >= 60 → entra
+THRESHOLD_ENTRADA     = 58   # score >= 58 → entra (slots normais)
+THRESHOLD_PREMIUM     = 90   # score >= 90 → entra em slot premium (posições 5-6)
 THRESHOLD_CORRELACAO  = 80   # score >= 80 → entra mesmo com activo correlacionado aberto
 RSI_MIN_ENTRADA       = 25   # RSI mínimo para qualquer entrada (evita oversold extremo)
 RSI_MAX_ENTRADA       = 75   # RSI máximo para qualquer entrada (evita overbought extremo)
 CUSTO_OP          = 0.001    # 0.1% entrada + 0.1% saída
 SL_MULT           = 2.0      # Stop Loss  = 2× ATR diário
 TP_MULT           = 4.0      # Take Profit = 4× ATR diário (ratio 1:2)
-CAPITAL_POR_OP    = 0.02     # 2% do saldo por operação
-MAX_POSICOES      = 3
+CAPITAL_POR_OP    = 0.015    # 1.5% do saldo por operação
+MAX_POSICOES      = 6        # máximo total (4 normais + 2 premium)
+MAX_POSICOES_NORMAL = 4      # slots normais (threshold 58%)
 PORT              = int(os.environ.get("PORT", 8080))
 SEP               = "=" * 60
 COOLDOWN_MIN      = 30       # minutos de espera após SL
@@ -907,12 +909,34 @@ def executar_ciclo():
     nomes_posicoes = {p["activo"] for p in carteira["posicoes_abertas"]}
     acoes = []
 
+    n_normais_ab = min(len(carteira["posicoes_abertas"]), MAX_POSICOES_NORMAL)
+    n_premium_ab = max(0, len(carteira["posicoes_abertas"]) - MAX_POSICOES_NORMAL)
+    print(f"[SLOTS]        {n_normais_ab}/{MAX_POSICOES_NORMAL} normais | {n_premium_ab}/2 premium")
+
     for cfg, ind, score, direcao in candidatos:
         nome = cfg["nome"]
         if nome in nomes_posicoes:
             continue
-        if len(carteira["posicoes_abertas"]) >= MAX_POSICOES:
+
+        n_abertas    = len(carteira["posicoes_abertas"])
+        slot_premium = n_abertas >= MAX_POSICOES_NORMAL
+
+        if n_abertas >= MAX_POSICOES:
             break
+
+        # Verificar threshold para slot premium
+        if slot_premium and score < THRESHOLD_PREMIUM:
+            acoes.append(
+                f"[CHEIO] {nome} score:{score}% — slots normais cheios, "
+                f"score insuficiente para premium ({score}% < {THRESHOLD_PREMIUM}%)"
+            )
+            idx = analise_por_nome.get(nome)
+            if idx is not None:
+                analises_novos[idx]["decisao_final"] = (
+                    f"REJEITADO — slots normais cheios, score {score}% < {THRESHOLD_PREMIUM}% premium"
+                )
+            continue
+
         if em_cooldown(carteira, nome):
             acoes.append(f"REJEITADO {nome}: cooldown SL activo")
             continue
@@ -961,13 +985,22 @@ def executar_ciclo():
         idx_ab = analise_por_nome.get(nome)
         if aberta:
             nomes_posicoes.add(nome)
-            if entrada_com_correlacao:
+            slot_num = len(carteira["posicoes_abertas"])
+            if slot_premium:
+                n_prem = slot_num - MAX_POSICOES_NORMAL
+                acoes.append(
+                    f"[SLOT PREMIUM] {nome} score:{score}% >= {THRESHOLD_PREMIUM}% → ENTROU "
+                    f"(slot premium {n_prem}/2)"
+                )
+            elif entrada_com_correlacao:
                 acoes.append(
                     f"[ENTROU] {nome} {direcao} @ {ind['preco']:.4f}  "
                     f"score:{score}% >= {THRESHOLD_CORRELACAO}% threshold correlação ✓"
                 )
             else:
-                acoes.append(f"ENTROU {nome} {direcao} @ {ind['preco']:.4f}  score:{score}%")
+                acoes.append(
+                    f"[NORMAL] {nome} {direcao} score:{score}% — slot {slot_num}/{MAX_POSICOES_NORMAL}"
+                )
             if idx_ab is not None:
                 analises_novos[idx_ab]["decisao_final"] = (
                     f"ENTROU {direcao} @ {ind['preco']:.4f} — score {score}%"
@@ -1009,8 +1042,8 @@ def main():
     _init_db()   # cria tabela + semeia com JSON local se DB estiver vazia
     print(f"\n{SEP}")
     print(f"  ROBOTRADING ESTRATÉGIA v3")
-    print(f"  8 activos | Ciclo 15min | Score ≥{THRESHOLD_ENTRADA}% | Tendência obrigatória")
-    print(f"  SL/TP por activo | Capital/op=2% | Cooldown={COOLDOWN_MIN}min após SL")
+    print(f"  8 activos | Ciclo 15min | Slots: {MAX_POSICOES_NORMAL} normais≥{THRESHOLD_ENTRADA}% + 2 premium≥{THRESHOLD_PREMIUM}%")
+    print(f"  SL/TP por activo | Capital/op={CAPITAL_POR_OP*100:.1f}% | Cooldown={COOLDOWN_MIN}min após SL")
     print(f"  RSI válido: [{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}] | Corr threshold: {THRESHOLD_CORRELACAO}%")
     print(f"  Sessões: Londra 07-12 UTC | NY 13-21 UTC | Cripto 24/7")
     print(f"  {' | '.join(a['nome'] for a in ACTIVOS)}")
