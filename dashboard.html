@@ -563,6 +563,7 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
 }
 .pos-gain-badge.ganhar { background: var(--green-dim); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
 .pos-gain-badge.perder { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+.pos-gain-badge.curso  { background: rgba(59,130,246,.1); color: var(--blue); border: 1px solid rgba(59,130,246,.3); }
 
 /* clickable kpi */
 .kpi-card.clickable { cursor: pointer; }
@@ -679,20 +680,6 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
     <div class="pos-cards-grid" id="pos-cards-grid"></div>
   </div>
 
-  <!-- MODAL HISTÓRICO DETALHADO -->
-  <div id="hist-modal" class="modal-overlay" onclick="if(event.target===this)closeHistModal()">
-    <div class="modal-box">
-      <div class="modal-head">
-        <div>
-          <div style="font-size:16px;font-weight:700">Histórico Detalhado</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">Todas as operações fechadas</div>
-        </div>
-        <button class="modal-close" onclick="closeHistModal()">✕</button>
-      </div>
-      <div class="modal-body" id="hist-modal-body"></div>
-    </div>
-  </div>
-
   <!-- GRÁFICO -->
   <div class="section-header">
     <div class="section-dot"></div>
@@ -768,6 +755,20 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
   </div>
 
 </div><!-- /container -->
+
+<!-- MODAL HISTÓRICO DETALHADO — fora do container para evitar problemas de stacking context -->
+<div id="hist-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div style="font-size:16px;font-weight:700">Histórico Detalhado</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Todas as operações fechadas</div>
+      </div>
+      <button class="modal-close" id="hist-modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="hist-modal-body"></div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -882,82 +883,91 @@ function renderPositions(posicoes) {
   const fmtP = v => typeof v === 'number' ? (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2) : '—';
 
   grid.innerHTML = posicoes.map((pos, i) => {
-    const isBuy = pos.tipo === 'COMPRAR';
-    const cor   = ACTIVO_CORES[pos.activo] || 'var(--text)';
-    const sl    = pos.sl_atual ?? pos.stop_loss;
-    const tp    = pos.take_profit;
-    const pe    = pos.preco_entrada;
-    const pa    = pos.preco_atual ?? pe;
-    const pnl   = pos.pnl_atual ?? 0;
-    const lp    = pos.lucro_protegido ?? 0;
-    const hasPnl = pos.pnl_atual != null;
-
-    let pct = 50;
-    if (isBuy) {
-      const r = tp - sl; if (r > 0) pct = Math.max(0, Math.min(100, (pa - sl) / r * 100));
-    } else {
-      const r = sl - tp; if (r > 0) pct = Math.max(0, Math.min(100, (sl - pa) / r * 100));
-    }
-    const dotClr = pct >= 60 ? 'var(--green)' : pct >= 35 ? 'var(--yellow)' : 'var(--red)';
-
-    const distSL = isBuy ? (pa - sl) : (sl - pa);
-    const distTP = isBuy ? (tp - pa) : (pa - tp);
-    const slRange = Math.abs(pe - sl);
-    const tpRange = Math.abs(pe - tp);
-    const pctSL = slRange > 0 ? (distSL / slRange * 100).toFixed(0) : '—';
-    const pctTP = tpRange > 0 ? (distTP / tpRange * 100).toFixed(0) : '—';
-
-    let durStr = '';
     try {
-      const ab = new Date(pos.hora_abertura.replace(' ', 'T') + '+00:00');
-      const diff = (Date.now() - ab.getTime()) / 60000;
-      const h = Math.floor(diff / 60), m = Math.floor(diff % 60);
-      durStr = h > 0 ? h + 'h ' + m + 'min' : m + 'min';
-    } catch(e) { durStr = ''; }
+      const isBuy = pos.tipo === 'COMPRAR';
+      const cor   = ACTIVO_CORES[pos.activo] || 'var(--text)';
+      const sl    = pos.sl_atual ?? pos.stop_loss ?? 0;
+      const tp    = pos.take_profit ?? 0;
+      const pe    = pos.preco_entrada ?? 0;
+      const pa    = pos.preco_atual ?? pe;
+      const pnl   = pos.pnl_atual ?? null;
+      const lp    = pos.lucro_protegido ?? 0;
+      const hasPnl = pnl != null;
+      const pnlVal = hasPnl ? pnl : 0;
 
-    const nid = 'p' + i;
-    const pnlCor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      let pct = 50;
+      if (isBuy) {
+        const r = tp - sl; if (r > 0) pct = Math.max(0, Math.min(100, (pa - sl) / r * 100));
+      } else {
+        const r = sl - tp; if (r > 0) pct = Math.max(0, Math.min(100, (sl - pa) / r * 100));
+      }
+      const dotClr = pct >= 60 ? 'var(--green)' : pct >= 35 ? 'var(--yellow)' : 'var(--red)';
 
-    return `<div class="pos-item ${isBuy ? 'buy-item' : 'sell-item'}" id="poscard-${nid}">
-      <div class="pos-item-head" onclick="togglePosDetail('${nid}')">
-        <div style="width:9px;height:9px;border-radius:50%;background:${cor};flex-shrink:0"></div>
-        <div class="pos-item-nome" style="color:${cor}">${pos.activo}</div>
-        <span class="badge ${isBuy?'comprar':'vender'}">${pos.tipo}</span>
-        <div class="pos-item-pnl" style="color:${pnlCor}">${hasPnl ? fmtP(pnl) : '—'}</div>
-        <span class="pos-item-chev" id="pos-chev-${nid}">▼</span>
-      </div>
-      <div class="pos-item-sub">Aberta${durStr ? ' há ' + durStr : ''} · ${pos.hora_abertura || '—'} UTC</div>
-      <div class="pos-detail" id="pos-detail-${nid}">
-        <div class="pos-detail-inner">
-          <div class="pos-info-grid">
-            <div><div class="pi-lbl">Entrada</div><div class="pi-val mono">${fmt(pe)}</div></div>
-            <div><div class="pi-lbl">Preço Actual</div><div class="pi-val mono" style="color:${pnlCor}">${hasPnl ? fmt(pa) : '—'}</div></div>
-            <div><div class="pi-lbl">PnL Actual</div><div class="pi-val" style="color:${pnlCor}">${hasPnl ? fmtP(pnl) : '—'}</div></div>
-            <div><div class="pi-lbl">Stop Loss (trailing)</div><div class="pi-val mono" style="color:var(--red)">${fmt(sl)}</div></div>
-            <div><div class="pi-lbl">Take Profit</div><div class="pi-val mono" style="color:var(--green)">${fmt(tp)}</div></div>
-            <div><div class="pi-lbl">Lucro Protegido</div><div class="pi-val" style="color:${lp >= 0 ? 'var(--green)' : 'var(--muted)'}">${fmtP(lp)}</div></div>
-          </div>
-          <div>
-            <div class="pos-prog-labels">
-              <span style="color:var(--red)">SL ${fmt(sl)}</span>
-              <span>${pct.toFixed(0)}% do percurso</span>
-              <span style="color:var(--green)">TP ${fmt(tp)}</span>
-            </div>
-            <div class="pos-prog-track">
-              <div class="pos-prog-dot" style="left:${pct.toFixed(1)}%;background:${dotClr}"></div>
-            </div>
-            <div class="pos-prog-pct" style="color:${dotClr}">
-              ${hasPnl ? `Para TP: $${Math.abs(distTP).toFixed(4)} (${pctTP}%) · Para SL: $${Math.abs(distSL).toFixed(4)} (${pctSL}%)` : 'Aguarda próximo ciclo para preço actual'}
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span class="pos-gain-badge ${pnl >= 0 ? 'ganhar' : 'perder'}">${pnl >= 0 ? '▲ A GANHAR' : '▼ A PERDER'}</span>
-            ${pos.score_entrada ? `<span style="font-size:12px;color:var(--muted)">Score entrada: <strong style="color:${pos.score_entrada>=60?'var(--green)':'var(--yellow)'}">${pos.score_entrada}%</strong></span>` : ''}
-          </div>
-          ${pos.raciocinio_entrada ? `<div><div class="detail-stitle">Raciocínio IA na Entrada</div><div class="detail-rac">${pos.raciocinio_entrada}</div></div>` : ''}
+      const distSL = isBuy ? (pa - sl) : (sl - pa);
+      const distTP = isBuy ? (tp - pa) : (pa - tp);
+      const slRange = Math.abs(pe - sl);
+      const tpRange = Math.abs(pe - tp);
+      const pctSL = slRange > 0 ? (distSL / slRange * 100).toFixed(0) : '—';
+      const pctTP = tpRange > 0 ? (distTP / tpRange * 100).toFixed(0) : '—';
+
+      let durStr = '';
+      try {
+        const ab = new Date(String(pos.hora_abertura).replace(' ', 'T') + '+00:00');
+        const diff = (Date.now() - ab.getTime()) / 60000;
+        if (isFinite(diff) && diff >= 0) {
+          const h = Math.floor(diff / 60), m = Math.floor(diff % 60);
+          durStr = h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+        }
+      } catch(e) { durStr = ''; }
+
+      const nid = 'p' + i;
+      const pnlCor = hasPnl ? (pnlVal >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
+      const badgeCls = hasPnl ? (pnlVal >= 0 ? 'ganhar' : 'perder') : 'curso';
+      const badgeTxt = hasPnl ? (pnlVal >= 0 ? '▲ A GANHAR' : '▼ A PERDER') : '● EM CURSO';
+
+      return `<div class="pos-item ${isBuy ? 'buy-item' : 'sell-item'}" id="poscard-${nid}">
+        <div class="pos-item-head" onclick="togglePosDetail('${nid}')">
+          <div style="width:9px;height:9px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+          <div class="pos-item-nome" style="color:${cor}">${pos.activo || '—'}</div>
+          <span class="badge ${isBuy?'comprar':'vender'}">${pos.tipo || '—'}</span>
+          <div class="pos-item-pnl" style="color:${pnlCor}">${hasPnl ? fmtP(pnlVal) : '—'}</div>
+          <span class="pos-item-chev" id="pos-chev-${nid}">▼</span>
         </div>
-      </div>
-    </div>`;
+        <div class="pos-item-sub">Aberta${durStr ? ' há ' + durStr : ''} · ${pos.hora_abertura || '—'} UTC</div>
+        <div class="pos-detail" id="pos-detail-${nid}">
+          <div class="pos-detail-inner">
+            <div class="pos-info-grid">
+              <div><div class="pi-lbl">Entrada</div><div class="pi-val mono">${fmt(pe)}</div></div>
+              <div><div class="pi-lbl">Preço Actual</div><div class="pi-val mono" style="color:${pnlCor}">${hasPnl ? fmt(pa) : '—'}</div></div>
+              <div><div class="pi-lbl">PnL Actual</div><div class="pi-val" style="color:${pnlCor}">${hasPnl ? fmtP(pnlVal) : '—'}</div></div>
+              <div><div class="pi-lbl">Stop Loss (trailing)</div><div class="pi-val mono" style="color:var(--red)">${fmt(sl)}</div></div>
+              <div><div class="pi-lbl">Take Profit</div><div class="pi-val mono" style="color:var(--green)">${fmt(tp)}</div></div>
+              <div><div class="pi-lbl">Lucro Protegido</div><div class="pi-val" style="color:${lp >= 0 ? 'var(--green)' : 'var(--muted)'}">${fmtP(lp)}</div></div>
+            </div>
+            <div>
+              <div class="pos-prog-labels">
+                <span style="color:var(--red)">SL ${fmt(sl)}</span>
+                <span>${pct.toFixed(0)}% do percurso</span>
+                <span style="color:var(--green)">TP ${fmt(tp)}</span>
+              </div>
+              <div class="pos-prog-track">
+                <div class="pos-prog-dot" style="left:${pct.toFixed(1)}%;background:${dotClr}"></div>
+              </div>
+              <div class="pos-prog-pct" style="color:${dotClr}">
+                ${hasPnl ? 'Para TP: $' + Math.abs(distTP).toFixed(4) + ' (' + pctTP + '%) · Para SL: $' + Math.abs(distSL).toFixed(4) + ' (' + pctSL + '%)' : 'Aguarda próximo ciclo para preço actual'}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <span class="pos-gain-badge ${badgeCls}">${badgeTxt}</span>
+              ${pos.score_entrada ? '<span style="font-size:12px;color:var(--muted)">Score entrada: <strong style="color:' + (pos.score_entrada >= 60 ? 'var(--green)' : 'var(--yellow)') + '">' + pos.score_entrada + '%</strong></span>' : ''}
+            </div>
+            ${pos.raciocinio_entrada ? '<div><div class="detail-stitle">Raciocínio IA na Entrada</div><div class="detail-rac">' + pos.raciocinio_entrada + '</div></div>' : ''}
+          </div>
+        </div>
+      </div>`;
+    } catch(err) {
+      return `<div class="pos-item" style="padding:14px 18px;color:var(--muted)">${(pos && pos.activo) || '?'} · ${(pos && pos.tipo) || '?'} · erro ao renderizar</div>`;
+    }
   }).join('');
 }
 
@@ -971,16 +981,29 @@ function togglePosDetail(nid) {
 
 // ── MODAL HISTÓRICO ───────────────────────────────────────────────────────────
 function openHistModal() {
-  const hist = dadosGlobais?.carteira?.historico || [];
-  renderHistModal(hist);
-  document.getElementById('hist-modal').classList.add('open');
+  const modal = document.getElementById('hist-modal');
+  if (!modal) return;
+  modal.classList.add('open');
   document.body.style.overflow = 'hidden';
+  try {
+    const hist = dadosGlobais?.carteira?.historico || [];
+    renderHistModal(hist);
+  } catch(e) {
+    const body = document.getElementById('hist-modal-body');
+    if (body) body.innerHTML = '<div class="empty" style="padding:48px">Erro ao carregar histórico.</div>';
+  }
 }
 function closeHistModal() {
-  document.getElementById('hist-modal').classList.remove('open');
+  const modal = document.getElementById('hist-modal');
+  if (modal) modal.classList.remove('open');
   document.body.style.overflow = '';
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistModal(); });
+document.addEventListener('click', e => {
+  const modal = document.getElementById('hist-modal');
+  if (modal && e.target === modal) closeHistModal();
+});
+document.getElementById('hist-modal-close').addEventListener('click', closeHistModal);
 
 function renderHistModal(hist) {
   const body = document.getElementById('hist-modal-body');
@@ -1392,5 +1415,6 @@ window.addEventListener('load', () => {
   }, 1200);
 });
 </script>
+
 </body>
 </html>
