@@ -461,6 +461,116 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
 /* Reasoning */
 .detail-rac { font-size: 12px; color: var(--muted); line-height: 1.65; }
 .no-detail  { font-size: 12px; color: var(--muted2); text-align: center; padding: 10px 0; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 32px 16px; overflow-y: auto;
+  opacity: 0; visibility: hidden;
+  transition: opacity .25s ease, visibility .25s ease;
+}
+.modal-overlay.open { opacity: 1; visibility: visible; }
+.modal-box {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 18px; width: 100%; max-width: 740px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.6);
+  transform: translateY(20px);
+  transition: transform .25s ease;
+  overflow: hidden;
+}
+.modal-overlay.open .modal-box { transform: translateY(0); }
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg2); z-index: 1;
+}
+.modal-close {
+  width: 32px; height: 32px; background: var(--bg4);
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--muted); cursor: pointer; font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.modal-close:hover { background: var(--red-dim); color: var(--red); border-color: rgba(239,68,68,.4); }
+.modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── HIST OP CARD ── */
+.hist-op { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.hist-op-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
+}
+.hist-op-nome { font-size: 14px; font-weight: 700; }
+.hist-op-dur  { font-size: 11px; color: var(--muted); margin-left: auto; }
+.hist-op-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.hof { padding: 10px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.hof:nth-child(3n) { border-right: none; }
+.hof-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.hof-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hist-op-pnl { display: flex; border-bottom: 1px solid var(--border); }
+.hist-op-pnl > div { flex: 1; padding: 10px 16px; border-right: 1px solid var(--border); }
+.hist-op-pnl > div:last-child { border-right: none; }
+.hist-op-rac { padding: 10px 16px; font-size: 12px; color: var(--muted); line-height: 1.65; }
+
+/* ── OPEN POSITION CARDS ── */
+.pos-cards-grid { display: flex; flex-direction: column; gap: 12px; }
+.pos-item {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 14px; cursor: pointer;
+  transition: border-color .2s, box-shadow .2s;
+}
+.pos-item:hover { border-color: var(--border2); box-shadow: 0 4px 20px rgba(0,0,0,.25); }
+.pos-item.buy-item  { border-left: 3px solid var(--green); }
+.pos-item.sell-item { border-left: 3px solid var(--red); }
+.pos-item-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 18px 8px;
+}
+.pos-item-nome { font-size: 15px; font-weight: 700; flex: 1; }
+.pos-item-pnl  { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pos-item-sub  { font-size: 11px; color: var(--muted); padding: 0 18px 12px; }
+.pos-item-chev { color: var(--muted); font-size: 11px; transition: transform .28s; }
+.pos-item-chev.open { transform: rotate(180deg); }
+.pos-detail { max-height: 0; overflow: hidden; transition: max-height .38s ease; }
+.pos-detail.open { max-height: 700px; }
+.pos-detail-inner {
+  border-top: 1px solid var(--border); padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pos-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pi-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.pi-val { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Progress bar */
+.pos-prog-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+.pos-prog-track  { position: relative; height: 8px; background: var(--border); border-radius: 4px; }
+.pos-prog-dot {
+  position: absolute; top: 50%; width: 14px; height: 14px;
+  border-radius: 50%; border: 2px solid var(--bg2);
+  transform: translate(-50%, -50%);
+  transition: left .5s ease, background .5s ease; z-index: 1;
+}
+.pos-prog-pct { text-align: center; font-size: 11px; color: var(--muted); margin-top: 5px; }
+.pos-gain-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+}
+.pos-gain-badge.ganhar { background: var(--green-dim); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+.pos-gain-badge.perder { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+
+/* clickable kpi */
+.kpi-card.clickable { cursor: pointer; }
+.kpi-card.clickable:hover { border-color: var(--blue); box-shadow: 0 4px 24px rgba(59,130,246,.2); }
+@media (max-width: 600px) {
+  .hist-op-grid { grid-template-columns: repeat(2, 1fr); }
+  .pos-info-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 </head>
 <body>
@@ -541,11 +651,11 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
       <div class="kpi-value mono" id="win-rate">—</div>
       <div class="kpi-sub" id="ganhas-perdidas">0 ganhas · 0 perdidas</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card clickable" onclick="openHistModal()" title="Ver histórico detalhado">
       <div class="kpi-icon" style="background:rgba(139,92,246,.15);color:var(--purple)">⚡</div>
       <div class="kpi-label">Total Operações</div>
       <div class="kpi-value" id="total-ops">0</div>
-      <div class="kpi-sub" id="pos-status">Sem posição aberta</div>
+      <div class="kpi-sub" id="pos-status">Ver histórico →</div>
     </div>
   </div>
 
@@ -559,36 +669,27 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
     <div class="activos-grid" id="activos-grid"></div>
   </div>
 
-  <!-- POSIÇÃO ABERTA -->
+  <!-- POSIÇÕES ABERTAS -->
   <div id="posicao-section">
     <div class="section-header">
       <div class="section-dot" style="background:linear-gradient(180deg,var(--green),#34d399)"></div>
-      <div class="section-title">Posição Aberta</div>
+      <div class="section-title">Posições Abertas</div>
+      <div class="section-subtitle" id="pos-count-sub">· clica para expandir</div>
     </div>
-    <div class="posicao-wrap" id="posicao-wrap">
-      <div class="posicao-card">
-        <div class="pos-tag" id="pos-tag">COMPRAR</div>
-        <div class="pos-field">
-          <div class="lbl">Activo</div>
-          <div class="val" id="pos-activo">—</div>
+    <div class="pos-cards-grid" id="pos-cards-grid"></div>
+  </div>
+
+  <!-- MODAL HISTÓRICO DETALHADO -->
+  <div id="hist-modal" class="modal-overlay" onclick="if(event.target===this)closeHistModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div style="font-size:16px;font-weight:700">Histórico Detalhado</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Todas as operações fechadas</div>
         </div>
-        <div class="pos-field">
-          <div class="lbl">Tipo</div>
-          <div class="val" id="pos-tipo">—</div>
-        </div>
-        <div class="pos-field">
-          <div class="lbl">Entrada</div>
-          <div class="val mono" id="pos-entrada">—</div>
-        </div>
-        <div class="pos-field">
-          <div class="lbl">Stop Loss</div>
-          <div class="val mono" style="color:var(--red)" id="pos-sl">—</div>
-        </div>
-        <div class="pos-field">
-          <div class="lbl">Take Profit</div>
-          <div class="val mono" style="color:var(--green)" id="pos-tp">—</div>
-        </div>
+        <button class="modal-close" onclick="closeHistModal()">✕</button>
       </div>
+      <div class="modal-body" id="hist-modal-body"></div>
     </div>
   </div>
 
@@ -736,32 +837,18 @@ function renderCarteira(c) {
   document.getElementById('ganhas-perdidas').textContent = ganhas + ' ganhas · ' + perdidas + ' perdidas';
   document.getElementById('total-ops').textContent = total;
 
-  // Posição aberta (suporta posicoes_abertas plural e posicao_aberta singular)
+  // Posições abertas
   const posicoes = c.posicoes_abertas?.length ? c.posicoes_abertas : (c.posicao_aberta ? [c.posicao_aberta] : []);
-  const pos = posicoes[0] || null;
   const posSection = document.getElementById('posicao-section');
-
-  if (pos) {
+  if (posicoes.length) {
     posSection.style.display = 'block';
-    const isBuy = pos.tipo === 'COMPRAR';
     const n = posicoes.length;
-    const wrap = document.getElementById('posicao-wrap');
-    const tag  = document.getElementById('pos-tag');
-    wrap.className = 'posicao-wrap' + (isBuy ? '' : ' sell');
-    tag.className  = 'pos-tag' + (isBuy ? '' : ' sell');
-    tag.textContent = pos.tipo || '—';
-    document.getElementById('pos-activo').textContent = pos.activo || '—';
-    document.getElementById('pos-activo').style.color = ACTIVO_CORES[pos.activo] || 'var(--text)';
-    document.getElementById('pos-tipo').textContent  = pos.tipo || '—';
-    document.getElementById('pos-tipo').style.color  = isBuy ? 'var(--green)' : 'var(--red)';
-    const fmt = v => typeof v === 'number' ? (v > 1000 ? v.toLocaleString('pt-PT',{minimumFractionDigits:2}) : v.toFixed(4)) : '—';
-    document.getElementById('pos-entrada').textContent = fmt(pos.preco_entrada);
-    document.getElementById('pos-sl').textContent      = fmt(pos.stop_loss);
-    document.getElementById('pos-tp').textContent      = fmt(pos.take_profit);
-    document.getElementById('pos-status').textContent  = n + ' posição' + (n > 1 ? 'es' : '') + ' aberta' + (n > 1 ? 's' : '');
+    document.getElementById('pos-status').textContent = n + ' posição' + (n > 1 ? 'es' : '') + ' aberta' + (n > 1 ? 's' : '');
+    document.getElementById('pos-count-sub').textContent = '· ' + n + ' aberta' + (n > 1 ? 's' : '') + ' — clica para expandir';
+    renderPositions(posicoes);
   } else {
     posSection.style.display = 'none';
-    document.getElementById('pos-status').textContent = 'Sem posição aberta';
+    document.getElementById('pos-status').textContent = 'Ver histórico →';
   }
 
   // Histórico operações
@@ -785,6 +872,160 @@ function renderCarteira(c) {
       </tr>`;
     }).join('');
   }
+}
+
+// ── POSIÇÕES ABERTAS COM PROGRESS BAR ────────────────────────────────────────
+function renderPositions(posicoes) {
+  const grid = document.getElementById('pos-cards-grid');
+  if (!grid) return;
+  const fmt = v => typeof v === 'number' ? (v > 999 ? v.toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}) : v.toFixed(4)) : '—';
+  const fmtP = v => typeof v === 'number' ? (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2) : '—';
+
+  grid.innerHTML = posicoes.map((pos, i) => {
+    const isBuy = pos.tipo === 'COMPRAR';
+    const cor   = ACTIVO_CORES[pos.activo] || 'var(--text)';
+    const sl    = pos.sl_atual ?? pos.stop_loss;
+    const tp    = pos.take_profit;
+    const pe    = pos.preco_entrada;
+    const pa    = pos.preco_atual ?? pe;
+    const pnl   = pos.pnl_atual ?? 0;
+    const lp    = pos.lucro_protegido ?? 0;
+    const hasPnl = pos.pnl_atual != null;
+
+    let pct = 50;
+    if (isBuy) {
+      const r = tp - sl; if (r > 0) pct = Math.max(0, Math.min(100, (pa - sl) / r * 100));
+    } else {
+      const r = sl - tp; if (r > 0) pct = Math.max(0, Math.min(100, (sl - pa) / r * 100));
+    }
+    const dotClr = pct >= 60 ? 'var(--green)' : pct >= 35 ? 'var(--yellow)' : 'var(--red)';
+
+    const distSL = isBuy ? (pa - sl) : (sl - pa);
+    const distTP = isBuy ? (tp - pa) : (pa - tp);
+    const slRange = Math.abs(pe - sl);
+    const tpRange = Math.abs(pe - tp);
+    const pctSL = slRange > 0 ? (distSL / slRange * 100).toFixed(0) : '—';
+    const pctTP = tpRange > 0 ? (distTP / tpRange * 100).toFixed(0) : '—';
+
+    let durStr = '';
+    try {
+      const ab = new Date(pos.hora_abertura.replace(' ', 'T') + '+00:00');
+      const diff = (Date.now() - ab.getTime()) / 60000;
+      const h = Math.floor(diff / 60), m = Math.floor(diff % 60);
+      durStr = h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+    } catch(e) { durStr = ''; }
+
+    const nid = 'p' + i;
+    const pnlCor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+    return `<div class="pos-item ${isBuy ? 'buy-item' : 'sell-item'}" id="poscard-${nid}">
+      <div class="pos-item-head" onclick="togglePosDetail('${nid}')">
+        <div style="width:9px;height:9px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+        <div class="pos-item-nome" style="color:${cor}">${pos.activo}</div>
+        <span class="badge ${isBuy?'comprar':'vender'}">${pos.tipo}</span>
+        <div class="pos-item-pnl" style="color:${pnlCor}">${hasPnl ? fmtP(pnl) : '—'}</div>
+        <span class="pos-item-chev" id="pos-chev-${nid}">▼</span>
+      </div>
+      <div class="pos-item-sub">Aberta${durStr ? ' há ' + durStr : ''} · ${pos.hora_abertura || '—'} UTC</div>
+      <div class="pos-detail" id="pos-detail-${nid}">
+        <div class="pos-detail-inner">
+          <div class="pos-info-grid">
+            <div><div class="pi-lbl">Entrada</div><div class="pi-val mono">${fmt(pe)}</div></div>
+            <div><div class="pi-lbl">Preço Actual</div><div class="pi-val mono" style="color:${pnlCor}">${hasPnl ? fmt(pa) : '—'}</div></div>
+            <div><div class="pi-lbl">PnL Actual</div><div class="pi-val" style="color:${pnlCor}">${hasPnl ? fmtP(pnl) : '—'}</div></div>
+            <div><div class="pi-lbl">Stop Loss (trailing)</div><div class="pi-val mono" style="color:var(--red)">${fmt(sl)}</div></div>
+            <div><div class="pi-lbl">Take Profit</div><div class="pi-val mono" style="color:var(--green)">${fmt(tp)}</div></div>
+            <div><div class="pi-lbl">Lucro Protegido</div><div class="pi-val" style="color:${lp >= 0 ? 'var(--green)' : 'var(--muted)'}">${fmtP(lp)}</div></div>
+          </div>
+          <div>
+            <div class="pos-prog-labels">
+              <span style="color:var(--red)">SL ${fmt(sl)}</span>
+              <span>${pct.toFixed(0)}% do percurso</span>
+              <span style="color:var(--green)">TP ${fmt(tp)}</span>
+            </div>
+            <div class="pos-prog-track">
+              <div class="pos-prog-dot" style="left:${pct.toFixed(1)}%;background:${dotClr}"></div>
+            </div>
+            <div class="pos-prog-pct" style="color:${dotClr}">
+              ${hasPnl ? `Para TP: $${Math.abs(distTP).toFixed(4)} (${pctTP}%) · Para SL: $${Math.abs(distSL).toFixed(4)} (${pctSL}%)` : 'Aguarda próximo ciclo para preço actual'}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="pos-gain-badge ${pnl >= 0 ? 'ganhar' : 'perder'}">${pnl >= 0 ? '▲ A GANHAR' : '▼ A PERDER'}</span>
+            ${pos.score_entrada ? `<span style="font-size:12px;color:var(--muted)">Score entrada: <strong style="color:${pos.score_entrada>=60?'var(--green)':'var(--yellow)'}">${pos.score_entrada}%</strong></span>` : ''}
+          </div>
+          ${pos.raciocinio_entrada ? `<div><div class="detail-stitle">Raciocínio IA na Entrada</div><div class="detail-rac">${pos.raciocinio_entrada}</div></div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePosDetail(nid) {
+  const panel = document.getElementById('pos-detail-' + nid);
+  const chev  = document.getElementById('pos-chev-' + nid);
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  if (chev) chev.classList.toggle('open', isOpen);
+}
+
+// ── MODAL HISTÓRICO ───────────────────────────────────────────────────────────
+function openHistModal() {
+  const hist = dadosGlobais?.carteira?.historico || [];
+  renderHistModal(hist);
+  document.getElementById('hist-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeHistModal() {
+  document.getElementById('hist-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistModal(); });
+
+function renderHistModal(hist) {
+  const body = document.getElementById('hist-modal-body');
+  if (!hist.length) {
+    body.innerHTML = '<div class="empty" style="padding:48px">Sem operações fechadas ainda.</div>';
+    return;
+  }
+  const fmt  = v => typeof v === 'number' ? (v > 999 ? v.toLocaleString('pt-PT',{minimumFractionDigits:2}) : v.toFixed(4)) : '—';
+  const fmtP = v => typeof v === 'number' ? (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2) : '—';
+
+  body.innerHTML = [...hist].reverse().map(op => {
+    const ll     = op.lucro_liquido ?? op.lucro ?? 0;
+    const lb     = op.lucro_bruto ?? 0;
+    const isGanho = ll >= 0;
+    const cor    = ACTIVO_CORES[op.activo] || 'var(--yellow)';
+    let durStr   = '—';
+    if (op.duracao != null) {
+      const h = Math.floor(op.duracao / 60), m = op.duracao % 60;
+      durStr = h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+    }
+    const llCor = ll >= 0 ? 'var(--green)' : 'var(--red)';
+    const lbCor = lb >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div class="hist-op">
+      <div class="hist-op-head">
+        <div class="hist-op-nome" style="color:${cor}">${op.activo || '—'}</div>
+        <span class="badge ${(op.tipo||'').toLowerCase()}">${op.tipo||'—'}</span>
+        <span class="badge ${isGanho?'ganho':'perda'}">${isGanho?'▲ GANHOU':'▼ PERDEU'}</span>
+        <span class="hist-op-dur">⏱ ${durStr}</span>
+      </div>
+      <div class="hist-op-grid">
+        <div class="hof"><div class="hof-lbl">Abertura</div><div class="hof-val" style="font-size:12px">${op.hora_abertura||'—'}</div></div>
+        <div class="hof"><div class="hof-lbl">Fecho</div><div class="hof-val" style="font-size:12px">${op.hora_fecho||op.hora||'—'}</div></div>
+        <div class="hof"><div class="hof-lbl">Como Fechou</div><div class="hof-val" style="font-size:12px;color:${isGanho?'var(--green)':'var(--red)'}">${op.motivo_fecho||'—'}</div></div>
+        <div class="hof"><div class="hof-lbl">Entrada</div><div class="hof-val mono">$${fmt(op.entrada)}</div></div>
+        <div class="hof"><div class="hof-lbl">Saída</div><div class="hof-val mono">$${fmt(op.saida)}</div></div>
+        <div class="hof"><div class="hof-lbl">Score Entrada</div><div class="hof-val" style="color:${(op.score_entrada||0)>=60?'var(--green)':'var(--muted)'}">${op.score_entrada != null ? op.score_entrada + '%' : '—'}</div></div>
+      </div>
+      <div class="hist-op-pnl">
+        <div><div class="hof-lbl">Lucro Bruto</div><div class="hof-val" style="color:${lbCor}">${fmtP(lb)}</div></div>
+        <div><div class="hof-lbl">Custos</div><div class="hof-val" style="color:var(--red)">-$${(op.custos||0).toFixed(2)}</div></div>
+        <div><div class="hof-lbl">Lucro Líquido</div><div class="hof-val" style="color:${llCor};font-weight:700">${fmtP(ll)}</div></div>
+      </div>
+      ${op.raciocinio_entrada ? `<div class="hist-op-rac"><strong style="color:var(--text)">IA na entrada:</strong> ${op.raciocinio_entrada}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 // ── RESUMO ACTIVOS (TODOS) ────────────────────────────────────────────────────

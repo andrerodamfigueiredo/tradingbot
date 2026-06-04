@@ -617,26 +617,43 @@ def verificar_posicoes(carteira, precos):
                 resultado   = "GANHOU" if lucro_bruto >= 0 else "PERDEU"
 
         if resultado:
+            # Motivo do fecho
+            if preco_fecho == pos["take_profit"]:
+                motivo_fecho = "Atingiu Take Profit"
+            elif abs(pos["stop_loss"] - pos.get("sl_original", pos["stop_loss"])) > 0.0001:
+                motivo_fecho = "Trailing Stop activado"
+            else:
+                motivo_fecho = "Atingiu Stop Loss"
+            try:
+                hora_ab     = datetime.strptime(pos["hora_abertura"], "%Y-%m-%d %H:%M")
+                duracao_min = int((datetime.now() - hora_ab).total_seconds() / 60)
+            except Exception:
+                duracao_min = 0
+
             custo_fecho   = preco_fecho * pos["contratos"] * CUSTO_OP
             lucro_liquido = lucro_bruto - custo_fecho
             carteira["saldo"]         += lucro_liquido
             carteira["custos_totais"] += custo_fecho
             carteira["historico"].append({
-                "activo":        nome,
-                "tipo":          pos["tipo"],
-                "entrada":       pos["preco_entrada"],
-                "saida":         round(preco_fecho, 4),
-                "lucro_bruto":   round(lucro_bruto, 2),
-                "custos":        round(pos.get("custo_entrada", 0) + custo_fecho, 4),
-                "lucro_liquido": round(lucro_liquido, 2),
-                "lucro":         round(lucro_liquido, 2),
-                "resultado":     resultado,
-                "hora_abertura": pos["hora_abertura"],
-                "hora_fecho":    datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "hora":          datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "activo":             nome,
+                "tipo":               pos["tipo"],
+                "entrada":            pos["preco_entrada"],
+                "saida":              round(preco_fecho, 4),
+                "lucro_bruto":        round(lucro_bruto, 2),
+                "custos":             round(pos.get("custo_entrada", 0) + custo_fecho, 4),
+                "lucro_liquido":      round(lucro_liquido, 2),
+                "lucro":              round(lucro_liquido, 2),
+                "resultado":          resultado,
+                "hora_abertura":      pos["hora_abertura"],
+                "hora_fecho":         datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "hora":               datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "motivo_fecho":       motivo_fecho,
+                "duracao":            duracao_min,
+                "score_entrada":      pos.get("score_entrada", 0),
+                "raciocinio_entrada": pos.get("raciocinio_entrada", ""),
             })
             sinal = "+" if lucro_liquido >= 0 else ""
-            print(f"  ✓ FECHADA [{nome}] {resultado} | "
+            print(f"  ✓ FECHADA [{nome}] {resultado} ({motivo_fecho}) | "
                   f"Bruto:${lucro_bruto:.2f} Custos:${custo_fecho:.2f} Líquido:${sinal}{lucro_liquido:.2f}")
             if resultado == "PERDEU":
                 fechados_sl.append(nome)
@@ -651,6 +668,8 @@ def verificar_posicoes(carteira, precos):
             print(f"  ↔ ABERTA [{nome}] {pos['tipo']} @ {pos['preco_entrada']:.4f} "
                   f"| Actual: {preco:.4f} | PnL:{sinal}${pnl:.2f} "
                   f"| SL-dist:{dist_sl:.4f} TP-dist:{dist_tp:.4f}")
+            pos["preco_atual"] = round(preco, 4)
+            pos["pnl_atual"]   = round(pnl, 2)
             manter.append(pos)
 
     carteira["posicoes_abertas"] = manter
@@ -717,16 +736,19 @@ def abrir_posicao(carteira, activo, tipo, preco, atr_d, permitir_correlacao=Fals
     carteira["saldo"]         -= custo_entrada
     carteira["custos_totais"] += custo_entrada
     carteira["posicoes_abertas"].append({
-        "activo":        activo,
-        "tipo":          tipo,
-        "preco_entrada": round(preco, 4),
-        "stop_loss":     round(stop_loss, 4),
-        "take_profit":   round(take_profit, 4),
-        "contratos":     contratos,
-        "atr_d":         round(atr_d, 4),
-        "hora_abertura": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "custo_entrada": round(custo_entrada, 4),
-        "melhor_preco":  round(preco, 4),
+        "activo":             activo,
+        "tipo":               tipo,
+        "preco_entrada":      round(preco, 4),
+        "stop_loss":          round(stop_loss, 4),
+        "sl_original":        round(stop_loss, 4),
+        "take_profit":        round(take_profit, 4),
+        "contratos":          contratos,
+        "atr_d":              round(atr_d, 4),
+        "hora_abertura":      datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "custo_entrada":      round(custo_entrada, 4),
+        "melhor_preco":       round(preco, 4),
+        "score_entrada":      0,
+        "raciocinio_entrada": "",
     })
     print(f"  ★ ABERTA [{activo}] {tipo} @ {preco:.4f} | "
           f"SL:{stop_loss:.4f} TP:{take_profit:.4f} | ATR-d:{atr_d:.4f} Custo:${custo_entrada:.2f}")
@@ -985,6 +1007,12 @@ def executar_ciclo():
         idx_ab = analise_por_nome.get(nome)
         if aberta:
             nomes_posicoes.add(nome)
+            # Gravar score e raciocínio na posição recém-aberta
+            if carteira["posicoes_abertas"]:
+                ultima = carteira["posicoes_abertas"][-1]
+                ultima["score_entrada"] = score
+                if idx_ab is not None:
+                    ultima["raciocinio_entrada"] = analises_novos[idx_ab].get("raciocinio", "")
             slot_num = len(carteira["posicoes_abertas"])
             if slot_premium:
                 n_prem = slot_num - MAX_POSICOES_NORMAL
