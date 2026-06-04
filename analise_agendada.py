@@ -5,9 +5,12 @@ import os
 import json
 import time
 import threading
+import socket
 import http.server
 import warnings
 from datetime import datetime, timezone, timedelta
+
+socket.setdefaulttimeout(30)  # timeout global: nenhuma ligação de rede fica presa mais de 30s
 
 import pandas as pd
 
@@ -484,7 +487,7 @@ def analisar_noticias(noticias, activo_cfg, tendencia):
         "Responde APENAS com JSON válido sem markdown:\n"
         '{"sentimento":"POSITIVO ou NEGATIVO ou NEUTRO","raciocinio":"1 frase directa"}'
     )
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"), timeout=25.0)
     resp   = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=120,
