@@ -330,41 +330,58 @@ def atualizar_estatisticas(carteira):
 
 
 # ─── FILTROS ──────────────────────────────────────────────────────────────────
-def calcular_tendencia(ind):
-    """ALTA: preco>MM50>MM200 | BAIXA: preco<MM50<MM200 | INDEFINIDA: resto.
-    Fallback para MM100 quando MM200 é NaN (dados insuficientes em futuros)."""
+def calcular_tendencia(ind, ticker=""):
+    """Cascata MM200→MM100→MM50→MM20.
+    Para GC=F e CL=F (Ouro/Petróleo) nunca retorna INDEFINIDA — usa a MM
+    mais curta disponível quando as longas dão sinal misto.
+    Retorna (tendencia: str, nota: str) — nota indica qual MM foi usada."""
     import math
-    p, m50, m200 = ind["preco"], ind["mm50_d"], ind["mm200_d"]
-    if not math.isnan(m200):
-        if p > m50 and m50 > m200:
-            return "ALTA"
-        if p < m50 and m50 < m200:
-            return "BAIXA"
-        return "INDEFINIDA"
-    # MM200 indisponível — usa MM100 como referência de tendência longa
+    _CASCATA = {"GC=F", "CL=F"}
+    cascata  = ticker in _CASCATA
+    p    = ind["preco"]
+    m20  = ind.get("mm20_d",  float("nan"))
+    m50  = ind.get("mm50_d",  float("nan"))
     m100 = ind.get("mm100_d", float("nan"))
-    if not math.isnan(m100):
-        if p > m50 and m50 > m100:
-            return "ALTA"
-        if p < m50 and m50 < m100:
-            return "BAIXA"
-        return "INDEFINIDA"  # MM100 disponível mas condições mistas — genuinamente indefinida
-    # MM100 também indisponível — último recurso: preço vs MM50
+    m200 = ind.get("mm200_d", float("nan"))
+
+    # MM200 disponível
+    if not math.isnan(m200) and not math.isnan(m50):
+        if p > m50 and m50 > m200: return "ALTA",  ""
+        if p < m50 and m50 < m200: return "BAIXA", ""
+        if not cascata:             return "INDEFINIDA", ""
+        # GC=F/CL=F: sinal misto → cai para MM100
+
+    # MM100
+    if not math.isnan(m100) and not math.isnan(m50):
+        if p > m50 and m50 > m100: return "ALTA",  "via MM100"
+        if p < m50 and m50 < m100: return "BAIXA", "via MM100"
+        if not cascata:             return "INDEFINIDA", ""
+        # GC=F/CL=F: sinal misto → cai para MM50
+
+    # MM50 sozinho
     if not math.isnan(m50):
-        return "ALTA" if p > m50 else "BAIXA"
-    return "INDEFINIDA"
+        tend = "ALTA" if p > m50 else "BAIXA"
+        return tend, ("via MM50" if cascata else "")
+
+    # MM20 (último recurso)
+    if not math.isnan(m20):
+        tend = "ALTA" if p > m20 else "BAIXA"
+        return tend, "via MM20"
+
+    return "INDEFINIDA", ""
 
 
 def sessao_operacional(activo_cfg):
     """Retorna (pode_operar: bool, nome_sessao: str)"""
     if activo_cfg.get("cripto", False):
         return True, "24/7"
-    h = datetime.now(timezone.utc).hour
-    if 7 <= h < 12:
+    dt = datetime.now(timezone.utc)
+    t  = dt.hour * 60 + dt.minute   # minutos desde meia-noite UTC
+    if 6 * 60 + 45 <= t < 12 * 60:  # 06:45–12:00 UTC  (Londra + pré-abertura)
         return True, "LONDRA"
-    if 13 <= h < 21:
+    if 13 * 60 <= t < 21 * 60:      # 13:00–21:00 UTC  (Nova Iorque)
         return True, "NEW YORK"
-    return False, f"FECHADO({h:02d}h)"
+    return False, f"FECHADO({dt.hour:02d}h)"
 
 
 def activos_correlacionados(a, b):
@@ -432,6 +449,7 @@ def obter_indicadores(ticker):
     hd    = dd["High"].squeeze()
     ld    = dd["Low"].squeeze()
 
+    mm20_d  = cd.rolling(20).mean().iloc[-1].item()
     mm50_d  = cd.rolling(50).mean().iloc[-1].item()
     mm100_d = cd.rolling(100).mean().iloc[-1].item()
     mm200_d = cd.rolling(200).mean().iloc[-1].item()
@@ -448,7 +466,7 @@ def obter_indicadores(ticker):
         "bb_up": bb_up, "bb_mid": bb_mid, "bb_dn": bb_dn,
         "stoch_k": stoch_k, "stoch_k_prev": stoch_k_prev,
         "vol_ratio": vol_ratio,
-        "mm50_d": mm50_d, "mm100_d": mm100_d, "mm200_d": mm200_d,
+        "mm20_d": mm20_d, "mm50_d": mm50_d, "mm100_d": mm100_d, "mm200_d": mm200_d,
         "atr_d": atr_d,
     }
 
@@ -830,7 +848,7 @@ def executar_ciclo():
             print(f"ERRO dados: {e}")
             continue
 
-        tend                = calcular_tendencia(ind)
+        tend, tend_nota     = calcular_tendencia(ind, cfg["ticker"])
         pode_operar, sessao = sessao_operacional(cfg)
         cooldown_ativo      = em_cooldown(carteira, nome)
         ja_tem_posicao      = any(p["activo"] == nome for p in carteira["posicoes_abertas"])
@@ -865,6 +883,7 @@ def executar_ciclo():
         if not direcao:                  skips.append("tend.INDEFINIDA")
         if not pode_operar:              skips.append(sessao)
         if cooldown_ativo:               skips.append("cooldown SL")
+        if tend_nota:                    skips.append(tend_nota)
         skip_str = f"  [{', '.join(skips)}]" if skips else ""
 
         flag = " ★" if (pode_entrar and score >= THRESHOLD_ENTRADA) else ""
@@ -1076,7 +1095,7 @@ def main():
     print(f"  8 activos | Ciclo 15min | Slots: {MAX_POSICOES_NORMAL} normais≥{THRESHOLD_ENTRADA}% + 2 premium≥{THRESHOLD_PREMIUM}%")
     print(f"  SL/TP por activo | Capital/op={CAPITAL_POR_OP*100:.1f}% | Cooldown={COOLDOWN_MIN}min após SL")
     print(f"  RSI válido: [{RSI_MIN_ENTRADA},{RSI_MAX_ENTRADA}] | Corr threshold: {THRESHOLD_CORRELACAO}%")
-    print(f"  Sessões: Londra 07-12 UTC | NY 13-21 UTC | Cripto 24/7")
+    print(f"  Sessões: Londra 06:45-12 UTC | NY 13-21 UTC | Cripto 24/7")
     print(f"  {' | '.join(a['nome'] for a in ACTIVOS)}")
     print(f"{SEP}\n")
 
