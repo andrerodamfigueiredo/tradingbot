@@ -626,7 +626,7 @@ def verificar_posicoes(carteira, precos):
             elif preco <= pos["stop_loss"]:
                 lucro_bruto = (pos["stop_loss"] - pos["preco_entrada"]) * pos["contratos"]
                 preco_fecho = pos["stop_loss"]
-                resultado   = "GANHOU" if lucro_bruto >= 0 else "PERDEU"
+                resultado   = "PENDENTE_SL"   # recalculado após custo
         elif pos["tipo"] == "VENDER":
             if preco <= pos["take_profit"]:
                 lucro_bruto = (pos["preco_entrada"] - pos["take_profit"]) * pos["contratos"]
@@ -635,7 +635,7 @@ def verificar_posicoes(carteira, precos):
             elif preco >= pos["stop_loss"]:
                 lucro_bruto = (pos["preco_entrada"] - pos["stop_loss"]) * pos["contratos"]
                 preco_fecho = pos["stop_loss"]
-                resultado   = "GANHOU" if lucro_bruto >= 0 else "PERDEU"
+                resultado   = "PENDENTE_SL"   # recalculado após custo
 
         if resultado:
             # Motivo do fecho
@@ -653,6 +653,8 @@ def verificar_posicoes(carteira, precos):
 
             custo_fecho   = preco_fecho * pos["contratos"] * CUSTO_OP
             lucro_liquido = lucro_bruto - custo_fecho
+            if resultado == "PENDENTE_SL":
+                resultado = "GANHOU" if lucro_liquido >= 0 else "PERDEU"
             carteira["saldo"]         += lucro_liquido
             carteira["custos_totais"] += custo_fecho
             carteira["historico"].append({
