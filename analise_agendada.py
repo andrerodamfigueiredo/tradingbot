@@ -148,6 +148,8 @@ def iniciar_servidor_http():
             "/":                     ("dashboard.html",        "text/html; charset=utf-8"),
             "/dashboard.html":       ("dashboard.html",        "text/html; charset=utf-8"),
             "/dados_dashboard.json": ("dados_dashboard.json",  "application/json; charset=utf-8"),
+            "/diagnostico.html":     ("diagnostico.html",      "text/html; charset=utf-8"),
+            "/diagnostico_dados.json": ("diagnostico_dados.json", "application/json; charset=utf-8"),
         }
         def do_GET(self):
             path = self.path.split("?")[0]

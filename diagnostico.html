@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboTrading — Diagnóstico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0d1117;
+  --bg2:       #1a1f2e;
+  --bg3:       #1e2639;
+  --bg4:       #242c3d;
+  --border:    #2d3748;
+  --border2:   #374151;
+  --text:      #e2e8f0;
+  --muted:     #64748b;
+  --muted2:    #4a5568;
+  --blue:      #3b82f6;
+  --blue-dim:  rgba(59,130,246,.15);
+  --green:     #10b981;
+  --green-dim: rgba(16,185,129,.15);
+  --red:       #ef4444;
+  --red-dim:   rgba(239,68,68,.15);
+  --yellow:    #f59e0b;
+  --yellow-dim:rgba(245,158,11,.15);
+  --purple:    #8b5cf6;
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+
+body {
+  background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ── HEADER ── */
+header {
+  background: rgba(26,31,46,.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 64px;
+  display: flex; justify-content: space-between; align-items: center;
+  position: sticky; top: 0; z-index: 100;
+}
+.header-left  { display: flex; align-items: center; gap: 16px; }
+.header-right { display: flex; align-items: center; gap: 24px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 12px rgba(59,130,246,.3);
+}
+.brand-name { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.3px; }
+.brand-tag  { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+.nav-links { display:flex; gap:8px; margin-left: 12px; }
+.nav-link {
+  font-size:12px; font-weight:500; color:var(--muted);
+  padding:7px 16px; border-radius:8px; text-decoration:none;
+  border:1px solid transparent; transition: all .18s ease;
+}
+.nav-link:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
+.nav-link.active { background:var(--blue-dim); border-color:rgba(59,130,246,.4); color:var(--blue); font-weight:600; }
+
+.gerado-block { text-align: right; }
+.gerado-label { font-size: 10px; color: var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+.gerado-valor { font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; margin-top:2px; }
+
+/* ── LAYOUT ── */
+.container { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+
+.section-header { display: flex; align-items: center; gap: 10px; margin: 32px 0 16px; }
+.section-header:first-child { margin-top: 0; }
+.section-dot { width: 3px; height: 18px; background: linear-gradient(180deg, var(--blue), var(--purple)); border-radius: 2px; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: .3px; }
+.section-subtitle { font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+/* ── PERIOD BANNER ── */
+.period-banner {
+  background:var(--bg3); border:1px solid var(--border); border-radius:12px;
+  padding:14px 20px; margin-bottom:24px; font-size:13px; color:var(--muted);
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+}
+.period-banner b { color:var(--text); }
+
+/* ── VEREDITO ── */
+.veredito-card {
+  background: linear-gradient(135deg, var(--bg3), var(--bg4));
+  border:1px solid var(--border2); border-radius:14px;
+  padding:24px 28px; margin-bottom:28px;
+  position:relative; overflow:hidden;
+}
+.veredito-card::after {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background: linear-gradient(90deg, var(--blue), var(--purple));
+}
+.veredito-title { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+.veredito-resumo { font-size:15px; font-weight:600; color:var(--text); margin-bottom:20px; line-height:1.65; }
+.veredito-sub { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin: 18px 0 10px; }
+.veredito-obs { font-size:13px; color:var(--text); line-height:1.6; padding:12px 14px; background:rgba(255,255,255,.02); border-left:3px solid var(--blue); border-radius:0 8px 8px 0; margin-bottom:8px; }
+.veredito-obs .num { color:var(--blue); font-weight:700; margin-right:6px; }
+
+.testes-list { list-style:none; padding:0; margin:0; }
+.testes-list li { font-size:12px; color:var(--muted); padding:8px 0 8px 22px; position:relative; border-bottom:1px solid rgba(45,55,72,.4); line-height:1.6; }
+.testes-list li:last-child { border-bottom:none; }
+.testes-list li::before { content:'→'; position:absolute; left:0; color:var(--blue); font-weight:700; }
+
+/* ── LAYER DIVIDER ── */
+.layer-divider { display:flex; align-items:center; gap:14px; margin: 44px 0 20px; }
+.layer-divider .line { flex:1; height:1px; background:var(--border); }
+.layer-label { font-size:12px; font-weight:700; letter-spacing:1.8px; text-transform:uppercase; padding:7px 18px; border-radius:20px; white-space:nowrap; }
+.layer-label.factos  { background:var(--bg4); color:var(--text); border:1px solid var(--border2); }
+.layer-label.leitura { background:var(--yellow-dim); color:var(--yellow); border:1px solid rgba(245,158,11,.35); }
+
+.warning-banner {
+  background: var(--yellow-dim); border:1px solid rgba(245,158,11,.35);
+  border-radius:12px; padding:14px 20px; margin-bottom:24px;
+  font-size:13px; color:var(--yellow); font-weight:600;
+  display:flex; align-items:center; gap:10px;
+}
+
+/* ── KPI CARDS ── */
+.cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kpi-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 14px;
+  padding: 20px 22px; position: relative; overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+.kpi-card:hover { border-color: var(--border2); box-shadow: 0 4px 24px rgba(0,0,0,.3); }
+.kpi-card::after { content:''; position:absolute; top:0; left:0; right:0; height:3px; background: linear-gradient(90deg, var(--blue), var(--purple)); border-radius:14px 14px 0 0; opacity:.7; }
+.kpi-card.green-top::after { background: linear-gradient(90deg, var(--green), #34d399); }
+.kpi-card.red-top::after   { background: linear-gradient(90deg, var(--red), #f87171); }
+.kpi-card.yellow-top::after{ background: linear-gradient(90deg, var(--yellow), #fbbf24); }
+.kpi-label { font-size: 10px; font-weight: 500; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 8px; }
+.kpi-value { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.kpi-value.green  { color: var(--green); }
+.kpi-value.red    { color: var(--red); }
+.kpi-value.yellow { color: var(--yellow); }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 8px; line-height:1.5; }
+
+/* ── TABLES ── */
+.table-wrap { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: var(--bg4); color: var(--muted); font-size: 10px; font-weight: 600;
+  letter-spacing: .8px; text-transform: uppercase; padding: 12px 16px; text-align: left;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: 11px 16px; border-bottom: 1px solid rgba(45,55,72,.5); font-size: 13px; vertical-align: middle; white-space:nowrap; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+tbody tr:hover td { background: rgba(59,130,246,.05); }
+tbody tr.row-pior td { background: rgba(239,68,68,.07); }
+tbody tr.row-pior td:first-child { border-left: 3px solid var(--red); }
+.val-pos { color: var(--green); font-weight:600; }
+.val-neg { color: var(--red); font-weight:600; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
+.badge.comprar { background: var(--green-dim); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+.badge.vender  { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(239,68,68,.3); }
+.empty { color: var(--muted); text-align: center; padding: 40px 20px; font-size: 13px; }
+
+.subtable-title { font-size:12px; font-weight:600; color:var(--text); margin: 24px 0 10px; }
+
+/* ── INFO / LEITURA BOXES ── */
+.info-box {
+  background: rgba(100,116,139,.08); border:1px solid rgba(100,116,139,.25);
+  border-radius:10px; padding:14px 18px; font-size:12px; color:var(--muted); line-height:1.65;
+  margin-top:16px;
+}
+.info-box b { color: var(--text); }
+
+.leitura-card {
+  background: var(--bg3); border:1px solid rgba(245,158,11,.18);
+  border-left:3px solid var(--yellow);
+  border-radius:0 12px 12px 0; padding:16px 20px; margin-bottom:12px;
+  font-size:13px; line-height:1.65; color:var(--text);
+}
+.leitura-card .suporte {
+  display:block; margin-top:10px; font-size:10px; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.8px; font-weight:600;
+}
+
+.grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+
+/* ── FOOTER ── */
+.footer-note { text-align:center; color:var(--muted); font-size:11px; padding: 32px 0 16px; line-height:1.8; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1100px) {
+  .cards-grid { grid-template-columns: repeat(2, 1fr); }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  header { padding: 0 16px; flex-wrap:wrap; height:auto; padding-top:12px; padding-bottom:12px; gap:10px; }
+  .container { padding: 16px; }
+  .cards-grid { grid-template-columns: 1fr 1fr; }
+  .brand-tag { display:none; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="brand">
+      <div class="brand-icon">🔎</div>
+      <div>
+        <div class="brand-name">RoboTrading</div>
+        <div class="brand-tag">Diagnóstico · fase estável</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="/dashboard.html" class="nav-link">Dashboard</a>
+      <a href="/diagnostico.html" class="nav-link active">Diagnóstico</a>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="gerado-block">
+      <div class="gerado-label">Dados gerados em</div>
+      <div class="gerado-valor" id="gerado-em">—</div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="period-banner" id="period-banner">
+    A carregar período analisado...
+  </div>
+
+  <!-- VEREDITO -->
+  <div class="veredito-card">
+    <div class="veredito-title">Veredito automático</div>
+    <div class="veredito-resumo" id="veredito-resumo">A carregar...</div>
+    <div class="veredito-sub">3 observações mais fortes</div>
+    <div id="veredito-top3"></div>
+    <div class="veredito-sub">Próximos testes sugeridos</div>
+    <ul class="testes-list" id="veredito-testes"></ul>
+  </div>
+
+  <!-- ═══ CAMADA 1 — FACTOS ═══ -->
+  <div class="layer-divider">
+    <div class="line"></div>
+    <div class="layer-label factos">Camada 1 — Factos</div>
+    <div class="line"></div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-dot"></div>
+    <div class="section-title">Performance Geral</div>
+    <div class="section-subtitle">apenas operações da fase estável</div>
+  </div>
+  <div class="cards-grid" id="performance-cards"></div>
+
+  <div class="section-header">
+    <div class="section-dot"></div>
+    <div class="section-title">Por Activo</div>
+    <div class="section-subtitle">ordenado do pior ao melhor lucro líquido</div>
+  </div>
+  <div class="table-wrap"><div class="table-scroll" id="tabela-activo"></div></div>
+
+  <div class="grid-2" style="margin-top:24px">
+    <div>
+      <div class="section-header">
+        <div class="section-dot"></div>
+        <div class="section-title">Por Tipo de Operação</div>
+      </div>
+      <div class="table-wrap"><div class="table-scroll" id="tabela-tipo"></div></div>
+    </div>
+    <div>
+      <div class="section-header">
+        <div class="section-dot"></div>
+        <div class="section-title">Por Faixa de Score de Entrada</div>
+      </div>
+      <div class="table-wrap"><div class="table-scroll" id="tabela-score"></div></div>
+    </div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-dot"></div>
+    <div class="section-title">Por Sessão de Entrada</div>
+    <div class="section-subtitle">sessão em que a posição foi aberta (UTC)</div>
+  </div>
+  <div class="table-wrap"><div class="table-scroll" id="tabela-sessao"></div></div>
+
+  <div class="section-header">
+    <div class="section-dot"></div>
+    <div class="section-title">Padrão Temporal</div>
+    <div class="section-subtitle">duração, motivo de fecho e limitações dos dados</div>
+  </div>
+  <div class="cards-grid" id="temporal-cards"></div>
+  <div class="subtable-title">Por motivo de fecho</div>
+  <div class="table-wrap"><div class="table-scroll" id="tabela-motivo"></div></div>
+  <div id="casos-bruto-liquido"></div>
+  <div id="dados-insuficientes"></div>
+
+  <div class="section-header">
+    <div class="section-dot"></div>
+    <div class="section-title">Precisão das Previsões</div>
+    <div class="section-subtitle">COMPRAR/VENDER cruzado com faixa de score</div>
+  </div>
+  <div class="table-wrap"><div class="table-scroll" id="tabela-precisao-tipo"></div></div>
+  <div class="subtable-title">Matriz Tipo × Faixa de Score</div>
+  <div class="table-wrap"><div class="table-scroll" id="tabela-matriz"></div></div>
+  <div id="precisao-nota"></div>
+
+  <div class="section-header">
+    <div class="section-dot"></div>
+    <div class="section-title">Raciocínio de Entrada vs Direcção</div>
+    <div class="section-subtitle">heurística textual auditável — ver metodologia</div>
+  </div>
+  <div class="cards-grid" id="raciocinio-cards"></div>
+  <div class="info-box" id="raciocinio-metodologia"></div>
+  <div class="subtable-title">Operações com raciocínio "contra" a direcção aberta</div>
+  <div class="table-wrap"><div class="table-scroll" id="tabela-raciocinio"></div></div>
+
+  <!-- ═══ CAMADA 2 — LEITURA ═══ -->
+  <div class="layer-divider">
+    <div class="line"></div>
+    <div class="layer-label leitura">Camada 2 — Leitura</div>
+    <div class="line"></div>
+  </div>
+
+  <div class="warning-banner">
+    ⚠ Interpretação — hipóteses a validar com backtesting, não certezas. Cada afirmação cita o facto da Camada 1 que a suporta.
+  </div>
+  <div id="leitura-lista"></div>
+
+  <div class="footer-note">
+    Página de diagnóstico — apenas leitura. Não interage com o robô, não abre/fecha posições e não altera nenhum parâmetro de estratégia.<br>
+    Gerada por <code>gerar_diagnostico.py</code> a partir do histórico em PostgreSQL.
+  </div>
+
+</div>
+
+<script>
+const HIP = '(hipótese — validar com backtesting antes de mudar)';
+
+function fmtMoney(x) {
+  if (x == null) return '—';
+  const sign = x >= 0 ? '+' : '';
+  return `${sign}$${x.toFixed(2)}`;
+}
+function moneyClass(x) { return x >= 0 ? 'val-pos' : 'val-neg'; }
+function fmtPct(x) { return x == null ? '—' : `${x.toFixed(2)}%`; }
+function fmtDur(min) {
+  if (min == null) return '—';
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `${h}h ${m}m`;
+}
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+function buildTable(headers, rows) {
+  if (!rows.length) return '<div class="empty">Sem dados.</div>';
+  let html = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  for (const r of rows) {
+    html += `<tr class="${r.cls || ''}">` + r.cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+fetch('diagnostico_dados.json', { cache: 'no-store' })
+  .then(r => r.json())
+  .then(render)
+  .catch(err => {
+    document.getElementById('period-banner').innerHTML =
+      '<span style="color:var(--red)">Erro ao carregar diagnostico_dados.json: ' + esc(err.message) + '</span>';
+  });
+
+function render(d) {
+  document.getElementById('gerado-em').textContent = d.gerado_em || '—';
+
+  // PERÍODO
+  const p = d.periodo;
+  document.getElementById('period-banner').innerHTML =
+    `Período analisado: <b>${esc(p.inicio)}</b> a <b>${esc(p.fim_dados)}</b> &nbsp;·&nbsp; ` +
+    `N = <b>${p.n_operacoes}</b> operações fechadas (fase estável) &nbsp;·&nbsp; ` +
+    `${p.n_ignoradas_fase_instavel} operações anteriores a ${esc(p.inicio)} foram ignoradas (fase instável, dados incompletos)`;
+
+  // VEREDITO
+  document.getElementById('veredito-resumo').textContent = d.veredito.resumo;
+  document.getElementById('veredito-top3').innerHTML = d.veredito.observacoes_top3.map((t, i) =>
+    `<div class="veredito-obs"><span class="num">${i+1}.</span>${esc(t)}</div>`
+  ).join('');
+  document.getElementById('veredito-testes').innerHTML = d.veredito.proximos_testes.map(t =>
+    `<li>${esc(t)}</li>`
+  ).join('');
+
+  const f = d.factos;
+
+  // PERFORMANCE GERAL
+  const pg = f.performance_geral;
+  document.getElementById('performance-cards').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Win Rate Real</div>
+      <div class="kpi-value ${pg.win_rate_pct >= 50 ? 'green' : 'red'}">${fmtPct(pg.win_rate_pct)}</div>
+      <div class="kpi-sub">${pg.ganhas} ganhas / ${pg.perdidas} perdidas (de ${pg.total_fechadas})</div>
+    </div>
+    <div class="kpi-card ${pg.lucro_liquido_realizado >= 0 ? 'green-top' : 'red-top'}">
+      <div class="kpi-label">Lucro Líquido Realizado</div>
+      <div class="kpi-value ${pg.lucro_liquido_realizado >= 0 ? 'green' : 'red'}">${fmtMoney(pg.lucro_liquido_realizado)}</div>
+      <div class="kpi-sub">após custos de transacção</div>
+    </div>
+    <div class="kpi-card ${pg.lucro_nao_realizado_posicoes_abertas >= 0 ? 'green-top' : 'red-top'}">
+      <div class="kpi-label">Lucro Não Realizado</div>
+      <div class="kpi-value ${pg.lucro_nao_realizado_posicoes_abertas >= 0 ? 'green' : 'red'}">${fmtMoney(pg.lucro_nao_realizado_posicoes_abertas)}</div>
+      <div class="kpi-sub">${pg.n_posicoes_abertas} posições abertas — pnl_atual, sem custo de fecho</div>
+    </div>
+    <div class="kpi-card yellow-top">
+      <div class="kpi-label">Custos Totais (período)</div>
+      <div class="kpi-value yellow">$${pg.custos_totais_periodo.toFixed(2)}</div>
+      <div class="kpi-sub">custos de transacção pagos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Ganho Médio (vencedores)</div>
+      <div class="kpi-value green">${fmtMoney(pg.lucro_medio_vencedores)}</div>
+      <div class="kpi-sub">média do lucro líquido nas operações ganhas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Perda Média (perdedores)</div>
+      <div class="kpi-value red">${fmtMoney(pg.perda_media_perdedores)}</div>
+      <div class="kpi-sub">média do lucro líquido nas operações perdidas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Rácio Ganho / Perda</div>
+      <div class="kpi-value">${pg.racio_ganho_perda != null ? pg.racio_ganho_perda.toFixed(2) : '—'}</div>
+      <div class="kpi-sub">win rate de equilíbrio ≈ ${fmtPct(pg.win_rate_equilibrio_pct)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Nota</div>
+      <div class="kpi-sub" style="margin-top:0">${esc(pg.nota_unrealized)}</div>
+    </div>
+  `;
+
+  // POR ACTIVO
+  document.getElementById('tabela-activo').innerHTML = buildTable(
+    ['Activo','N','Ganhas','Perdidas','Win Rate','Lucro Líquido','Lucro Médio'],
+    f.por_activo.map(r => ({
+      cls: r.activo === f.pior_activo ? 'row-pior' : '',
+      cells: [esc(r.activo), r.n, r.ganhas, r.perdidas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`,
+              `<span class="${moneyClass(r.lucro_medio)}">${fmtMoney(r.lucro_medio)}</span>`]
+    }))
+  );
+
+  // POR TIPO
+  document.getElementById('tabela-tipo').innerHTML = buildTable(
+    ['Tipo','N','Ganhas','Win Rate','Lucro Líquido','Lucro Médio'],
+    f.por_tipo.map(r => ({
+      cells: [`<span class="badge ${r.tipo === 'COMPRAR' ? 'comprar' : 'vender'}">${esc(r.tipo)}</span>`,
+              r.n, r.ganhas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`,
+              `<span class="${moneyClass(r.lucro_medio)}">${fmtMoney(r.lucro_medio)}</span>`]
+    }))
+  );
+
+  // POR SCORE
+  document.getElementById('tabela-score').innerHTML = buildTable(
+    ['Faixa Score','N','Ganhas','Win Rate','Lucro Líquido','Lucro Médio'],
+    f.por_score.map(r => ({
+      cells: [esc(r.faixa), r.n, r.ganhas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`,
+              `<span class="${moneyClass(r.lucro_medio)}">${fmtMoney(r.lucro_medio)}</span>`]
+    }))
+  );
+
+  // POR SESSÃO
+  document.getElementById('tabela-sessao').innerHTML = buildTable(
+    ['Sessão de Entrada','N','Ganhas','Win Rate','Lucro Líquido','Lucro Médio'],
+    f.por_sessao.map(r => ({
+      cells: [esc(r.sessao), r.n, r.ganhas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`,
+              `<span class="${moneyClass(r.lucro_medio)}">${fmtMoney(r.lucro_medio)}</span>`]
+    }))
+  );
+
+  // PADRÃO TEMPORAL
+  const pt = f.padrao_temporal;
+  document.getElementById('temporal-cards').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Duração Média (geral)</div>
+      <div class="kpi-value">${fmtDur(pt.duracao_media_min)}</div>
+      <div class="kpi-sub">${pt.duracao_media_min != null ? pt.duracao_media_min.toFixed(0) + ' min' : ''}</div>
+    </div>
+    <div class="kpi-card green-top">
+      <div class="kpi-label">Duração Média (ganhas)</div>
+      <div class="kpi-value green">${fmtDur(pt.duracao_media_ganhas_min)}</div>
+      <div class="kpi-sub">${pt.duracao_media_ganhas_min != null ? pt.duracao_media_ganhas_min.toFixed(0) + ' min' : ''}</div>
+    </div>
+    <div class="kpi-card red-top">
+      <div class="kpi-label">Duração Média (perdidas)</div>
+      <div class="kpi-value red">${fmtDur(pt.duracao_media_perdidas_min)}</div>
+      <div class="kpi-sub">${pt.duracao_media_perdidas_min != null ? pt.duracao_media_perdidas_min.toFixed(0) + ' min' : ''}</div>
+    </div>
+  `;
+  document.getElementById('tabela-motivo').innerHTML = buildTable(
+    ['Motivo de Fecho','N','Ganhas','Win Rate','Lucro Líquido'],
+    pt.por_motivo_fecho.map(r => ({
+      cells: [esc(r.motivo), r.n, r.ganhas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`]
+    }))
+  );
+
+  if (pt.casos_bruto_positivo_liquido_negativo && pt.casos_bruto_positivo_liquido_negativo.length) {
+    const rows = pt.casos_bruto_positivo_liquido_negativo.map(c =>
+      `${esc(c.activo)} ${esc(c.tipo)} (${esc(c.hora_fecho)}): lucro bruto ${fmtMoney(c.lucro_bruto)} → lucro líquido ${fmtMoney(c.lucro_liquido)} [${esc(c.motivo_fecho)}]`
+    ).join('<br>');
+    document.getElementById('casos-bruto-liquido').innerHTML =
+      `<div class="info-box"><b>Casos onde os custos inverteram o sinal do resultado</b> (lucro bruto ≥ 0 mas lucro líquido &lt; 0):<br>${rows}</div>`;
+  }
+
+  document.getElementById('dados-insuficientes').innerHTML =
+    pt.dados_insuficientes.map(t => `<div class="info-box"><b>Dados insuficientes:</b> ${esc(t)}</div>`).join('');
+
+  // PRECISÃO DIRECÇÃO
+  const pd = f.precisao_direcao;
+  document.getElementById('tabela-precisao-tipo').innerHTML = buildTable(
+    ['Tipo','N','Ganhas','Win Rate','Lucro Líquido'],
+    pd.por_tipo.map(r => ({
+      cells: [`<span class="badge ${r.tipo === 'COMPRAR' ? 'comprar' : 'vender'}">${esc(r.tipo)}</span>`,
+              r.n, r.ganhas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`]
+    }))
+  );
+  document.getElementById('tabela-matriz').innerHTML = buildTable(
+    ['Tipo','Faixa Score','N','Ganhas','Win Rate','Lucro Líquido'],
+    pd.matriz_tipo_score.map(r => ({
+      cells: [`<span class="badge ${r.tipo === 'COMPRAR' ? 'comprar' : 'vender'}">${esc(r.tipo)}</span>`,
+              esc(r.faixa), r.n, r.ganhas, fmtPct(r.win_rate_pct),
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`]
+    }))
+  );
+  document.getElementById('precisao-nota').innerHTML = `<div class="info-box">${esc(pd.nota)}</div>`;
+
+  // RACIOCÍNIO VS DIRECÇÃO
+  const rvd = f.raciocinio_vs_direcao;
+  document.getElementById('raciocinio-cards').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Raciocínio "Contra" a Direcção</div>
+      <div class="kpi-value yellow">${rvd.n_raciocinio_contra} / ${rvd.n_total}</div>
+      <div class="kpi-sub">win rate ${fmtPct(rvd.win_rate_contra_pct)} · lucro líquido ${fmtMoney(rvd.lucro_liquido_contra)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Restantes Operações</div>
+      <div class="kpi-value">${rvd.n_raciocinio_outros} / ${rvd.n_total}</div>
+      <div class="kpi-sub">win rate ${fmtPct(rvd.win_rate_outros_pct)} · lucro líquido ${fmtMoney(rvd.lucro_liquido_outros)}</div>
+    </div>
+  `;
+  document.getElementById('raciocinio-metodologia').innerHTML =
+    `<b>Metodologia (heurística textual auditável):</b> ${esc(rvd.descricao)}<br><br>` +
+    `Gatilhos negativos: ${rvd.gatilhos_negativos.map(esc).join(', ')}<br>` +
+    `Frases-direcção (VENDER): ${rvd.frases_vender.map(esc).join(', ')}<br>` +
+    `Frases-direcção (COMPRAR): ${rvd.frases_comprar.map(esc).join(', ')}`;
+  document.getElementById('tabela-raciocinio').innerHTML = buildTable(
+    ['Activo','Tipo','Hora Fecho','Score Entrada','Lucro Líquido'],
+    rvd.operacoes_raciocinio_contra.map(r => ({
+      cells: [esc(r.activo), `<span class="badge ${r.tipo === 'COMPRAR' ? 'comprar' : 'vender'}">${esc(r.tipo)}</span>`,
+              esc(r.hora_fecho), r.score_entrada ?? '—',
+              `<span class="${moneyClass(r.lucro_liquido)}">${fmtMoney(r.lucro_liquido)}</span>`]
+    }))
+  );
+
+  // LEITURA
+  document.getElementById('leitura-lista').innerHTML = d.leitura.map(l =>
+    `<div class="leitura-card">${esc(l.texto)}<span class="suporte">Suporte: ${esc(l.suporte)}</span></div>`
+  ).join('');
+}
+</script>
+
+</body>
+</html>

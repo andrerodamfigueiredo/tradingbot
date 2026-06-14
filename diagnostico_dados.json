@@ -1,0 +1,406 @@
+{
+  "gerado_em": "2026-06-14 22:49 UTC",
+  "periodo": {
+    "inicio": "2026-06-07",
+    "fim_dados": "2026-06-14",
+    "n_operacoes": 17,
+    "n_ignoradas_fase_instavel": 16
+  },
+  "veredito": {
+    "resumo": "Fase estável (2026-06-07 a 2026-06-14, N=17 operações fechadas): win rate real 17.65% (3/17), lucro líquido realizado $-519.44, lucro não realizado (posições abertas) $444.79.",
+    "observacoes_top3": [
+      "O rácio ganho médio / perda média é 1.81 (ganho médio +$109.65 vs perda média $-60.6), o que exigiria um win rate de equilíbrio de ~35.59%. O win rate real é 17.65% (3/17), muito abaixo desse limiar — o problema dominante parece ser a taxa de acerto, não o tamanho relativo de stops/profits. (hipótese — validar com backtesting antes de mudar)",
+      "Agrupando por sessão em que a posição foi ABERTA: 'Londres' (N=5) fecharam com lucro líquido total $292.19 e win rate 60.0% (3/5), enquanto 'New York' e 'Cripto 24/7' (N=12) fecharam com $-811.63 e win rate 0.0% (0/12). (hipótese — validar com backtesting antes de mudar)",
+      "Operações com score_entrada 90+ tiveram 0.0% win rate (0/2, lucro líquido $-127.8), enquanto operações com score 58-79 tiveram 33.33% win rate (2/6). Nesta amostra, o score actual não mostra correlação positiva clara com o resultado. (hipótese — validar com backtesting antes de mudar)"
+    ],
+    "proximos_testes": [
+      "Backtest isolado da sessão New York (13-21 UTC) vs Londres vs Cripto para os 8 activos, no período 2026-06-07 em diante — a validar em backtesting, não aplicar directamente.",
+      "Backtest do score_entrada como filtro (ex.: exigir score >= 80 vs permitir >= 58) sobre uma amostra maior — a validar em backtesting, não aplicar directamente.",
+      "Revisão isolada do prompt/instrução que gera 'raciocinio_entrada' para confirmar se a direcção (COMPRAR/VENDER) está a ser extraída correctamente do raciocínio gerado pelo modelo — a validar antes de qualquer alteração ao código de produção.",
+      "Instrumentar o registo de fecho para incluir melhor_preco e o timestamp em que ocorreu, para permitir no futuro testar a hipótese de reversão pós-pico — requer alteração futura ao analise_agendada.py, fora do âmbito desta camada de leitura."
+    ]
+  },
+  "factos": {
+    "performance_geral": {
+      "total_fechadas": 17,
+      "ganhas": 3,
+      "perdidas": 14,
+      "win_rate_pct": 17.65,
+      "lucro_liquido_realizado": -519.44,
+      "lucro_nao_realizado_posicoes_abertas": 444.79,
+      "n_posicoes_abertas": 4,
+      "custos_totais_periodo": 489.78,
+      "lucro_medio_vencedores": 109.65,
+      "perda_media_perdedores": -60.6,
+      "racio_ganho_perda": 1.81,
+      "win_rate_equilibrio_pct": 35.59,
+      "nota_unrealized": "lucro_nao_realizado é o pnl_atual reportado pelo robô — não inclui o custo de fecho que será debitado quando a posição for encerrada."
+    },
+    "por_activo": [
+      {
+        "activo": "EUR/USD",
+        "n": 6,
+        "ganhas": 1,
+        "perdidas": 5,
+        "win_rate_pct": 16.67,
+        "lucro_liquido": -320.41,
+        "lucro_medio": -53.4
+      },
+      {
+        "activo": "Bitcoin",
+        "n": 2,
+        "ganhas": 0,
+        "perdidas": 2,
+        "win_rate_pct": 0.0,
+        "lucro_liquido": -194.82,
+        "lucro_medio": -97.41
+      },
+      {
+        "activo": "Ethereum",
+        "n": 2,
+        "ganhas": 0,
+        "perdidas": 2,
+        "win_rate_pct": 0.0,
+        "lucro_liquido": -187.8,
+        "lucro_medio": -93.9
+      },
+      {
+        "activo": "S&P 500",
+        "n": 4,
+        "ganhas": 0,
+        "perdidas": 4,
+        "win_rate_pct": 0.0,
+        "lucro_liquido": -102.51,
+        "lucro_medio": -25.63
+      },
+      {
+        "activo": "Nasdaq",
+        "n": 2,
+        "ganhas": 1,
+        "perdidas": 1,
+        "win_rate_pct": 50.0,
+        "lucro_liquido": -10.05,
+        "lucro_medio": -5.02
+      },
+      {
+        "activo": "Ouro",
+        "n": 1,
+        "ganhas": 1,
+        "perdidas": 0,
+        "win_rate_pct": 100.0,
+        "lucro_liquido": 296.15,
+        "lucro_medio": 296.15
+      }
+    ],
+    "pior_activo": "EUR/USD",
+    "por_tipo": [
+      {
+        "tipo": "VENDER",
+        "n": 11,
+        "ganhas": 2,
+        "win_rate_pct": 18.18,
+        "lucro_liquido": -406.88,
+        "lucro_medio": -36.99
+      },
+      {
+        "tipo": "COMPRAR",
+        "n": 6,
+        "ganhas": 1,
+        "win_rate_pct": 16.67,
+        "lucro_liquido": -112.56,
+        "lucro_medio": -18.76
+      }
+    ],
+    "por_score": [
+      {
+        "faixa": "58-69",
+        "n": 3,
+        "ganhas": 1,
+        "win_rate_pct": 33.33,
+        "lucro_liquido": -45.1,
+        "lucro_medio": -15.03
+      },
+      {
+        "faixa": "70-79",
+        "n": 3,
+        "ganhas": 1,
+        "win_rate_pct": 33.33,
+        "lucro_liquido": 137.12,
+        "lucro_medio": 45.71
+      },
+      {
+        "faixa": "80-89",
+        "n": 9,
+        "ganhas": 1,
+        "win_rate_pct": 11.11,
+        "lucro_liquido": -483.66,
+        "lucro_medio": -53.74
+      },
+      {
+        "faixa": "90+",
+        "n": 2,
+        "ganhas": 0,
+        "win_rate_pct": 0.0,
+        "lucro_liquido": -127.8,
+        "lucro_medio": -63.9
+      }
+    ],
+    "por_sessao": [
+      {
+        "sessao": "New York",
+        "n": 8,
+        "ganhas": 0,
+        "win_rate_pct": 0.0,
+        "lucro_liquido": -429.01,
+        "lucro_medio": -53.63
+      },
+      {
+        "sessao": "Cripto 24/7",
+        "n": 4,
+        "ganhas": 0,
+        "win_rate_pct": 0.0,
+        "lucro_liquido": -382.62,
+        "lucro_medio": -95.66
+      },
+      {
+        "sessao": "Londres",
+        "n": 5,
+        "ganhas": 3,
+        "win_rate_pct": 60.0,
+        "lucro_liquido": 292.19,
+        "lucro_medio": 58.44
+      }
+    ],
+    "padrao_temporal": {
+      "duracao_media_min": 1642.18,
+      "duracao_media_ganhas_min": 1559.67,
+      "duracao_media_perdidas_min": 1659.86,
+      "por_motivo_fecho": [
+        {
+          "motivo": "Trailing Stop activado",
+          "n": 16,
+          "ganhas": 2,
+          "win_rate_pct": 12.5,
+          "lucro_liquido": -815.59
+        },
+        {
+          "motivo": "Atingiu Take Profit",
+          "n": 1,
+          "ganhas": 1,
+          "win_rate_pct": 100.0,
+          "lucro_liquido": 296.15
+        }
+      ],
+      "casos_bruto_positivo_liquido_negativo": [
+        {
+          "activo": "S&P 500",
+          "tipo": "COMPRAR",
+          "hora_fecho": "2026-06-08 22:15",
+          "lucro_bruto": 8.65,
+          "lucro_liquido": -0.32,
+          "motivo_fecho": "Trailing Stop activado"
+        }
+      ],
+      "dados_insuficientes": [
+        "melhor_preco (pico de preço/lucro durante a vida da posição) só é guardado para posições ABERTAS — não fica registado no histórico quando a posição fecha. Por isso NÃO é possível calcular, para operações já fechadas: (a) quanto tempo após a abertura ocorreu o lucro máximo, (b) quanto desse pico foi devolvido (drawdown) até ao fecho, (c) % de perdedoras que estiveram em lucro significativo antes de reverter, (d) lucro médio devolvido pelas que reverteram. A hipótese 'primeiras ~5h em lucro, depois sangra até ao stop' NÃO É TESTÁVEL com os dados actuais."
+      ]
+    },
+    "precisao_direcao": {
+      "por_tipo": [
+        {
+          "tipo": "VENDER",
+          "n": 11,
+          "ganhas": 2,
+          "win_rate_pct": 18.18,
+          "lucro_liquido": -406.88,
+          "lucro_medio": -36.99
+        },
+        {
+          "tipo": "COMPRAR",
+          "n": 6,
+          "ganhas": 1,
+          "win_rate_pct": 16.67,
+          "lucro_liquido": -112.56,
+          "lucro_medio": -18.76
+        }
+      ],
+      "matriz_tipo_score": [
+        {
+          "tipo": "COMPRAR",
+          "faixa": "58-69",
+          "n": 1,
+          "ganhas": 0,
+          "win_rate_pct": 0.0,
+          "lucro_liquido": -9.93
+        },
+        {
+          "tipo": "COMPRAR",
+          "faixa": "80-89",
+          "n": 4,
+          "ganhas": 1,
+          "win_rate_pct": 25.0,
+          "lucro_liquido": -61.05
+        },
+        {
+          "tipo": "COMPRAR",
+          "faixa": "90+",
+          "n": 1,
+          "ganhas": 0,
+          "win_rate_pct": 0.0,
+          "lucro_liquido": -41.58
+        },
+        {
+          "tipo": "VENDER",
+          "faixa": "58-69",
+          "n": 2,
+          "ganhas": 1,
+          "win_rate_pct": 50.0,
+          "lucro_liquido": -35.17
+        },
+        {
+          "tipo": "VENDER",
+          "faixa": "70-79",
+          "n": 3,
+          "ganhas": 1,
+          "win_rate_pct": 33.33,
+          "lucro_liquido": 137.12
+        },
+        {
+          "tipo": "VENDER",
+          "faixa": "80-89",
+          "n": 5,
+          "ganhas": 0,
+          "win_rate_pct": 0.0,
+          "lucro_liquido": -422.61
+        },
+        {
+          "tipo": "VENDER",
+          "faixa": "90+",
+          "n": 1,
+          "ganhas": 0,
+          "win_rate_pct": 0.0,
+          "lucro_liquido": -86.22
+        }
+      ],
+      "nota": "Amostra pequena (N=17) — muitas células da matriz têm N=1 ou 2, não têm significado estatístico isolado."
+    },
+    "raciocinio_vs_direcao": {
+      "descricao": "Nº de operações cujo próprio texto 'raciocinio_entrada' (gerado pelo robô na abertura) descreve, através de palavras-chave, um cenário desfavorável à direcção escolhida (ex.: raciocínio fala de força do EUR mas a posição é VENDER em EUR/USD).",
+      "gatilhos_negativos": [
+        "prejudic",
+        "contradi",
+        "contrari",
+        "deprecia",
+        "enfraquece a posiç"
+      ],
+      "frases_vender": [
+        "posição vendid",
+        "posição de venda",
+        "vendedora"
+      ],
+      "frases_comprar": [
+        "posição compr",
+        "posição de compra",
+        "comprada"
+      ],
+      "n_total": 17,
+      "n_raciocinio_contra": 9,
+      "win_rate_contra_pct": 22.22,
+      "lucro_liquido_contra": -158.69,
+      "n_raciocinio_outros": 8,
+      "win_rate_outros_pct": 12.5,
+      "lucro_liquido_outros": -360.75,
+      "operacoes_raciocinio_contra": [
+        {
+          "activo": "Bitcoin",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-07 07:30",
+          "lucro_liquido": -102.69,
+          "score_entrada": 70
+        },
+        {
+          "activo": "EUR/USD",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-09 09:18",
+          "lucro_liquido": -86.22,
+          "score_entrada": 100
+        },
+        {
+          "activo": "EUR/USD",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-10 13:42",
+          "lucro_liquido": -36.44,
+          "score_entrada": 65
+        },
+        {
+          "activo": "Ouro",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-10 17:45",
+          "lucro_liquido": 296.15,
+          "score_entrada": 70
+        },
+        {
+          "activo": "EUR/USD",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-11 01:48",
+          "lucro_liquido": -56.34,
+          "score_entrada": 70
+        },
+        {
+          "activo": "EUR/USD",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-11 17:39",
+          "lucro_liquido": 1.27,
+          "score_entrada": 65
+        },
+        {
+          "activo": "EUR/USD",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-11 19:25",
+          "lucro_liquido": -93.49,
+          "score_entrada": 85
+        },
+        {
+          "activo": "EUR/USD",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-12 09:28",
+          "lucro_liquido": -49.19,
+          "score_entrada": 80
+        },
+        {
+          "activo": "Ethereum",
+          "tipo": "VENDER",
+          "hora_fecho": "2026-06-14 21:33",
+          "lucro_liquido": -31.74,
+          "score_entrada": 85
+        }
+      ]
+    }
+  },
+  "leitura": [
+    {
+      "texto": "O rácio ganho médio / perda média é 1.81 (ganho médio +$109.65 vs perda média $-60.6), o que exigiria um win rate de equilíbrio de ~35.59%. O win rate real é 17.65% (3/17), muito abaixo desse limiar — o problema dominante parece ser a taxa de acerto, não o tamanho relativo de stops/profits. (hipótese — validar com backtesting antes de mudar)",
+      "suporte": "performance_geral"
+    },
+    {
+      "texto": "Agrupando por sessão em que a posição foi ABERTA: 'Londres' (N=5) fecharam com lucro líquido total $292.19 e win rate 60.0% (3/5), enquanto 'New York' e 'Cripto 24/7' (N=12) fecharam com $-811.63 e win rate 0.0% (0/12). (hipótese — validar com backtesting antes de mudar)",
+      "suporte": "por_sessao"
+    },
+    {
+      "texto": "Operações com score_entrada 90+ tiveram 0.0% win rate (0/2, lucro líquido $-127.8), enquanto operações com score 58-79 tiveram 33.33% win rate (2/6). Nesta amostra, o score actual não mostra correlação positiva clara com o resultado. (hipótese — validar com backtesting antes de mudar)",
+      "suporte": "por_score"
+    },
+    {
+      "texto": "'EUR/USD' é o activo com maior prejuízo líquido acumulado no período: $-320.41 em 6 operações (1 ganhas, win rate 16.67%). Nas 6 operações, todas foram VENDER e em todas o texto 'raciocinio_entrada' gerado pelo robô descreve explicitamente um cenário de força do EUR / fraqueza do USD (favorável a COMPRAR, desfavorável à posição VENDER aberta) — detecção por palavras-chave, ver raciocinio_vs_direcao.operacoes_raciocinio_contra. (hipótese — validar com backtesting antes de mudar)",
+      "suporte": "por_activo + raciocinio_vs_direcao"
+    },
+    {
+      "texto": "No total, 9 de 17 operações (52.94%) têm um raciocínio de entrada cujo texto descreve, por palavras-chave, um cenário desfavorável à direcção aberta. Win rate deste grupo: 22.22% (lucro líquido $-158.69) vs 12.5% no restante (lucro líquido $-360.75) — sem diferença que sugira esta heurística, por si só, como preditor geral; a concentração em EUR/USD acima parece específica desse activo/direcção, não um efeito geral. (hipótese — validar com backtesting antes de mudar)",
+      "suporte": "raciocinio_vs_direcao"
+    },
+    {
+      "texto": "Não é possível testar a hipótese central 'primeiras ~5h em lucro, depois sangra até ao stop' com os dados actuais, porque o histórico de fechos não guarda o preço/lucro de pico (melhor_preco) atingido durante a vida da posição — esse valor só existe enquanto a posição está aberta. (hipótese — validar com backtesting antes de mudar)",
+      "suporte": "padrao_temporal.dados_insuficientes"
+    }
+  ]
+}

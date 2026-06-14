@@ -116,6 +116,15 @@ header {
   50%      { opacity:.8; box-shadow: 0 0 0 5px rgba(16,185,129,0); }
 }
 
+.nav-links { display:flex; gap:8px; margin-left: 12px; }
+.nav-link {
+  font-size:12px; font-weight:500; color:var(--muted);
+  padding:7px 16px; border-radius:8px; text-decoration:none;
+  border:1px solid transparent; transition: all .18s ease;
+}
+.nav-link:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
+.nav-link.active { background:var(--blue-dim); border-color:rgba(59,130,246,.4); color:var(--blue); font-weight:600; }
+
 .clock-block { text-align: right; }
 .clock-time  { font-size: 20px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 1px; font-family: 'Inter', monospace; }
 .clock-date  { font-size: 11px; color: var(--muted); margin-top: 1px; }
@@ -602,6 +611,10 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
     <div class="status-pill">
       <div class="status-dot"></div>
       <span id="fetch-status">LIVE</span>
+    </div>
+    <div class="nav-links">
+      <a href="/dashboard.html" class="nav-link active">Dashboard</a>
+      <a href="/diagnostico.html" class="nav-link">Diagnóstico</a>
     </div>
   </div>
   <div class="header-right">
