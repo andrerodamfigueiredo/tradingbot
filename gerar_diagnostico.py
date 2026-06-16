@@ -39,7 +39,7 @@ def obter_carteira():
     url = os.environ.get("DATABASE_URL") or os.environ.get("DATABASE_PUBLIC_URL")
     if not url:
         raise SystemExit("Defina DATABASE_URL ou DATABASE_PUBLIC_URL no ambiente.")
-    conn = psycopg2.connect(url, connect_timeout=10)
+    conn = psycopg2.connect(url, connect_timeout=5)
     cur = conn.cursor()
     cur.execute("SELECT dados FROM carteira_estado LIMIT 1")
     row = cur.fetchone()
@@ -95,6 +95,14 @@ def raciocinio_aponta_contra(raciocinio, tipo):
 
 def round2(x):
     return round(x, 2)
+
+
+def fmt_dur(mins):
+    if mins is None:
+        return "—"
+    h = int(mins // 60)
+    m = int(round(mins % 60))
+    return f"{h}h{m:02d}m" if h else f"{m}m"
 
 
 # ─── CAMADA 1 — FACTOS ────────────────────────────────────────────────────────
@@ -247,23 +255,66 @@ def calcular_factos(hist, posicoes_abertas):
                 "motivo_fecho": h.get("motivo_fecho"),
             })
 
+    # ── PICO DE LUCRO (sensor melhor_preco / hora_melhor_preco / minutos_ate_pico) ──
+    # Só disponível para operações fechadas DEPOIS da instrumentação (2026-06-16).
+    def lucro_bruto_no_pico(h):
+        entrada, saida, melhor, bruto = h.get("entrada"), h.get("saida"), h.get("melhor_preco"), h.get("lucro_bruto")
+        if None in (entrada, saida, melhor, bruto):
+            return None
+        if h["tipo"] == "COMPRAR":
+            diff_saida, diff_pico = saida - entrada, melhor - entrada
+        else:  # VENDER
+            diff_saida, diff_pico = entrada - saida, entrada - melhor
+        if diff_saida == 0:
+            return None
+        return bruto * (diff_pico / diff_saida)
+
+    hist_com_sensor = [h for h in hist if h.get("minutos_ate_pico") is not None
+                        and h.get("melhor_preco") is not None]
+    minutos_pico = [h["minutos_ate_pico"] for h in hist_com_sensor]
+
+    devolucao_pct = []
+    for h in hist_com_sensor:
+        pico = lucro_bruto_no_pico(h)
+        if pico is not None and pico > 0:
+            devolucao_pct.append((pico - h["lucro_bruto"]) / pico * 100)
+
+    perdedoras_sensor = [h for h in hist_com_sensor if h["lucro_liquido"] < 0]
+    perdedoras_em_lucro_antes = [
+        h for h in perdedoras_sensor
+        if (lucro_bruto_no_pico(h) or 0) > 0.001
+    ]
+
+    pico_lucro = {
+        "n_com_sensor": len(hist_com_sensor),
+        "n_sem_sensor": len(hist) - len(hist_com_sensor),
+        "minutos_medios_ate_pico": round2(mean(minutos_pico)) if minutos_pico else None,
+        "pct_lucro_pico_devolvido_medio": round2(mean(devolucao_pct)) if devolucao_pct else None,
+        "n_com_devolucao_calculavel": len(devolucao_pct),
+        "perdedoras_em_lucro_significativo_antes_de_virar": {
+            "n": len(perdedoras_em_lucro_antes),
+            "n_total_perdedoras_com_sensor": len(perdedoras_sensor),
+            "pct": (round2(len(perdedoras_em_lucro_antes) / len(perdedoras_sensor) * 100)
+                    if perdedoras_sensor else None),
+        },
+        "nota": (
+            "Estes números cobrem apenas operações fechadas DEPOIS da instrumentação "
+            "de 'melhor_preco' / 'hora_melhor_preco' / 'minutos_ate_pico' (2026-06-16). "
+            "'lucro_bruto_no_pico' é estimado proporcionalmente ao movimento de preço "
+            "(melhor_preco vs entrada) face ao movimento total até ao fecho (saída vs "
+            "entrada) — não inclui custos de transacção. 'Significativo' = "
+            "lucro_bruto_no_pico > 0 (a posição esteve, em algum momento, em lucro "
+            "bruto antes de reverter)."
+        ),
+    }
+
     padrao_temporal = {
         "duracao_media_min": round2(mean(duracoes)) if duracoes else None,
         "duracao_media_ganhas_min": round2(mean(duracoes_ganhas)) if duracoes_ganhas else None,
         "duracao_media_perdidas_min": round2(mean(duracoes_perdidas)) if duracoes_perdidas else None,
         "por_motivo_fecho": tabela_motivo,
         "casos_bruto_positivo_liquido_negativo": casos_bruto_vs_liquido,
-        "dados_insuficientes": [
-            "melhor_preco (pico de preço/lucro durante a vida da posição) só é "
-            "guardado para posições ABERTAS — não fica registado no histórico "
-            "quando a posição fecha. Por isso NÃO é possível calcular, para "
-            "operações já fechadas: (a) quanto tempo após a abertura ocorreu o "
-            "lucro máximo, (b) quanto desse pico foi devolvido (drawdown) até "
-            "ao fecho, (c) % de perdedoras que estiveram em lucro significativo "
-            "antes de reverter, (d) lucro médio devolvido pelas que reverteram. "
-            "A hipótese 'primeiras ~5h em lucro, depois sangra até ao stop' NÃO "
-            "É TESTÁVEL com os dados actuais.",
-        ],
+        "pico_lucro": pico_lucro,
     }
 
     # ── PRECISÃO DAS PREVISÕES (COMPRAR/VENDER x score) ──
@@ -447,17 +498,49 @@ def calcular_leitura(factos):
             "suporte": "raciocinio_vs_direcao",
         })
 
-    # 7. Padrão temporal — registar a limitação como observação também
-    leitura.append({
-        "texto": (
-            "Não é possível testar a hipótese central 'primeiras ~5h em lucro, "
-            "depois sangra até ao stop' com os dados actuais, porque o histórico "
-            "de fechos não guarda o preço/lucro de pico (melhor_preco) atingido "
-            "durante a vida da posição — esse valor só existe enquanto a posição "
-            "está aberta. " + HIPOTESE
-        ),
-        "suporte": "padrao_temporal.dados_insuficientes",
-    })
+    # 7. Padrão temporal — pico de lucro (sensor melhor_preco / minutos_ate_pico)
+    pico = factos["padrao_temporal"]["pico_lucro"]
+    if pico["n_com_sensor"] == 0:
+        leitura.append({
+            "texto": (
+                "Ainda não há nenhuma operação fechada com o sensor de "
+                "'melhor_preco' / 'minutos_ate_pico' (instrumentado em "
+                "2026-06-16). A hipótese 'lucro nas primeiras horas, depois "
+                "reverte' ainda NÃO é testável — fica testável à medida que as "
+                "operações abertas a partir de agora forem fechando. " + HIPOTESE
+            ),
+            "suporte": "padrao_temporal.pico_lucro",
+        })
+    else:
+        partes = [
+            f"Com o sensor activo desde 2026-06-16, há {pico['n_com_sensor']} "
+            f"operação(ões) fechada(s) com dados de pico "
+            f"({pico['n_sem_sensor']} anteriores ainda sem este campo)."
+        ]
+        if pico["minutos_medios_ate_pico"] is not None:
+            partes.append(
+                f"Em média, o melhor preço (pico a favor) foi atingido "
+                f"{fmt_dur(pico['minutos_medios_ate_pico'])} após a abertura."
+            )
+        if pico["pct_lucro_pico_devolvido_medio"] is not None:
+            partes.append(
+                f"Das operações com lucro de pico positivo "
+                f"(N={pico['n_com_devolucao_calculavel']}), em média "
+                f"{pico['pct_lucro_pico_devolvido_medio']}% desse lucro de pico "
+                f"foi devolvido até ao fecho."
+            )
+        pla = pico["perdedoras_em_lucro_significativo_antes_de_virar"]
+        if pla["pct"] is not None:
+            partes.append(
+                f"Das perdedoras com sensor (N={pla['n_total_perdedoras_com_sensor']}), "
+                f"{pla['n']} ({pla['pct']}%) estiveram em lucro bruto antes de "
+                f"reverter para prejuízo."
+            )
+        partes.append(f"Amostra ainda muito pequena (N={pico['n_com_sensor']}) — interpretar com cautela. {HIPOTESE}")
+        leitura.append({
+            "texto": " ".join(partes),
+            "suporte": "padrao_temporal.pico_lucro",
+        })
 
     return leitura
 
@@ -483,10 +566,10 @@ def calcular_veredito(factos, leitura, periodo):
         "para confirmar se a direcção (COMPRAR/VENDER) está a ser extraída "
         "correctamente do raciocínio gerado pelo modelo — a validar antes de "
         "qualquer alteração ao código de produção.",
-        "Instrumentar o registo de fecho para incluir melhor_preco e o "
-        "timestamp em que ocorreu, para permitir no futuro testar a hipótese "
-        "de reversão pós-pico — requer alteração futura ao "
-        "analise_agendada.py, fora do âmbito desta camada de leitura.",
+        "Acompanhar 'padrao_temporal.pico_lucro' à medida que mais operações "
+        "fecharem com o sensor de melhor_preco/minutos_ate_pico (activo desde "
+        "2026-06-16), para testar com amostra maior a hipótese de reversão "
+        "pós-pico — validar em backtesting antes de qualquer alteração.",
     ]
     return {"resumo": resumo, "observacoes_top3": top3, "proximos_testes": proximos_testes}
 

@@ -307,7 +307,9 @@ tbody tr.row-pior td:first-child { border-left: 3px solid var(--red); }
   <div class="subtable-title">Por motivo de fecho</div>
   <div class="table-wrap"><div class="table-scroll" id="tabela-motivo"></div></div>
   <div id="casos-bruto-liquido"></div>
-  <div id="dados-insuficientes"></div>
+  <div class="subtable-title">Pico de Lucro (sensor melhor_preco / hora_melhor_preco)</div>
+  <div class="cards-grid" id="pico-lucro-cards"></div>
+  <div id="pico-lucro-nota"></div>
 
   <div class="section-header">
     <div class="section-dot"></div>
@@ -530,8 +532,32 @@ function render(d) {
       `<div class="info-box"><b>Casos onde os custos inverteram o sinal do resultado</b> (lucro bruto ≥ 0 mas lucro líquido &lt; 0):<br>${rows}</div>`;
   }
 
-  document.getElementById('dados-insuficientes').innerHTML =
-    pt.dados_insuficientes.map(t => `<div class="info-box"><b>Dados insuficientes:</b> ${esc(t)}</div>`).join('');
+  // PICO DE LUCRO (sensor melhor_preco / hora_melhor_preco / minutos_ate_pico)
+  if (pt.pico_lucro) {
+    const pico = pt.pico_lucro;
+    const devolvidoAlto = pico.pct_lucro_pico_devolvido_medio != null && pico.pct_lucro_pico_devolvido_medio >= 50;
+    document.getElementById('pico-lucro-cards').innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-label">Tempo Médio até ao Pico</div>
+        <div class="kpi-value">${fmtDur(pico.minutos_medios_ate_pico)}</div>
+        <div class="kpi-sub">N=${pico.n_com_sensor} com sensor (${pico.n_sem_sensor} sem sensor)</div>
+      </div>
+      <div class="kpi-card ${devolvidoAlto ? 'red-top' : 'yellow-top'}">
+        <div class="kpi-label">% Lucro de Pico Devolvido até ao Fecho</div>
+        <div class="kpi-value ${devolvidoAlto ? 'red' : 'yellow'}">${fmtPct(pico.pct_lucro_pico_devolvido_medio)}</div>
+        <div class="kpi-sub">média sobre N=${pico.n_com_devolucao_calculavel} com lucro de pico positivo</div>
+      </div>
+      <div class="kpi-card yellow-top">
+        <div class="kpi-label">Perdedoras em Lucro Antes de Reverter</div>
+        <div class="kpi-value yellow">${pico.perdedoras_em_lucro_significativo_antes_de_virar.n} / ${pico.perdedoras_em_lucro_significativo_antes_de_virar.n_total_perdedoras_com_sensor}</div>
+        <div class="kpi-sub">${fmtPct(pico.perdedoras_em_lucro_significativo_antes_de_virar.pct)} das perdedoras com sensor</div>
+      </div>
+    `;
+    document.getElementById('pico-lucro-nota').innerHTML = `<div class="info-box">${esc(pico.nota)}</div>`;
+  } else {
+    document.getElementById('pico-lucro-nota').innerHTML =
+      '<div class="info-box">Dados do sensor ainda não disponíveis — recarregue a página após o deploy.</div>';
+  }
 
   // PRECISÃO DIRECÇÃO
   const pd = f.precisao_direcao;

@@ -156,6 +156,14 @@ def iniciar_servidor_http():
             if path not in self.ROTAS:
                 self.send_error(404)
                 return
+            if path == "/diagnostico_dados.json":
+                # SENSOR 2: regenera o diagnóstico a cada pedido, isolado do
+                # robô — se falhar, fica a versão anterior em disco e seguimos.
+                try:
+                    import gerar_diagnostico
+                    gerar_diagnostico.main()
+                except (Exception, SystemExit) as e:
+                    print(f"[diagnostico] regeneração falhou (a mostrar dados anteriores): {e}")
             nome, ctype = self.ROTAS[path]
             try:
                 with open(os.path.join(BASE_DIR, nome), "rb") as f:
@@ -204,6 +212,7 @@ def _normalizar_carteira(c):
     c.setdefault("estatisticas", carteira_vazia()["estatisticas"])
     for pos in c["posicoes_abertas"]:
         pos.setdefault("melhor_preco", pos["preco_entrada"])
+        pos.setdefault("hora_melhor_preco", pos.get("hora_abertura", ""))
     return c
 
 
@@ -587,10 +596,12 @@ def verificar_posicoes(carteira, precos):
         trailing_mult = _TRAILING_MULT.get(nome, 1.0)
         atr           = pos.get("atr_d", 0)
         melhor        = pos.get("melhor_preco", pos["preco_entrada"])
+        agora_str     = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         if pos["tipo"] == "VENDER":
             if preco < melhor:
-                pos["melhor_preco"] = round(preco, 4)
+                pos["melhor_preco"]      = round(preco, 4)
+                pos["hora_melhor_preco"] = agora_str
                 melhor = preco
             novo_sl = round(melhor + atr * trailing_mult, 4)
             if novo_sl < pos["stop_loss"]:
@@ -603,7 +614,8 @@ def verificar_posicoes(carteira, precos):
                       f"Lucro protegido: {sinal_lp}${lp:.2f}")
         else:  # COMPRAR
             if preco > melhor:
-                pos["melhor_preco"] = round(preco, 4)
+                pos["melhor_preco"]      = round(preco, 4)
+                pos["hora_melhor_preco"] = agora_str
                 melhor = preco
             novo_sl = round(melhor - atr * trailing_mult, 4)
             if novo_sl > pos["stop_loss"]:
@@ -651,7 +663,16 @@ def verificar_posicoes(carteira, precos):
                 hora_ab     = datetime.strptime(pos["hora_abertura"], "%Y-%m-%d %H:%M")
                 duracao_min = int((datetime.now() - hora_ab).total_seconds() / 60)
             except Exception:
+                hora_ab     = None
                 duracao_min = 0
+
+            minutos_ate_pico = None
+            if hora_ab is not None and pos.get("hora_melhor_preco"):
+                try:
+                    hora_pico = datetime.strptime(pos["hora_melhor_preco"], "%Y-%m-%d %H:%M")
+                    minutos_ate_pico = int((hora_pico - hora_ab).total_seconds() / 60)
+                except Exception:
+                    minutos_ate_pico = None
 
             custo_fecho   = preco_fecho * pos["contratos"] * CUSTO_OP
             lucro_liquido = lucro_bruto - custo_fecho
@@ -676,6 +697,9 @@ def verificar_posicoes(carteira, precos):
                 "duracao":            duracao_min,
                 "score_entrada":      pos.get("score_entrada", 0),
                 "raciocinio_entrada": pos.get("raciocinio_entrada", ""),
+                "melhor_preco":       pos.get("melhor_preco"),
+                "hora_melhor_preco":  pos.get("hora_melhor_preco"),
+                "minutos_ate_pico":   minutos_ate_pico,
             })
             sinal = "+" if lucro_liquido >= 0 else ""
             print(f"  ✓ FECHADA [{nome}] {resultado} ({motivo_fecho}) | "
@@ -772,6 +796,7 @@ def abrir_posicao(carteira, activo, tipo, preco, atr_d, permitir_correlacao=Fals
         "hora_abertura":      datetime.now().strftime("%Y-%m-%d %H:%M"),
         "custo_entrada":      round(custo_entrada, 4),
         "melhor_preco":       round(preco, 4),
+        "hora_melhor_preco":  datetime.now().strftime("%Y-%m-%d %H:%M"),
         "score_entrada":      0,
         "raciocinio_entrada": "",
     })
