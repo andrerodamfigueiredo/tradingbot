@@ -142,6 +142,8 @@ CORRELACOES = [
 
 
 # ─── HTTP SERVER ──────────────────────────────────────────────────────────────
+_MANUAL_LOCK = threading.Lock()
+
 def iniciar_servidor_http():
     class Handler(http.server.BaseHTTPRequestHandler):
         ROTAS = {
@@ -178,6 +180,114 @@ def iniciar_servidor_http():
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(corpo)
+        def do_OPTIONS(self):
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
+        def _json_resp(self, status, data):
+            body = json.dumps(data, ensure_ascii=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):
+            if self.path != "/fechar_manual":
+                self._json_resp(404, {"erro": "rota não encontrada"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body   = json.loads(self.rfile.read(length))
+                nome   = str(body["activo"])
+                hora_a = str(body["hora_abertura"])
+            except Exception:
+                self._json_resp(400, {"erro": "corpo inválido"})
+                return
+            ticker = next((a["ticker"] for a in ACTIVOS if a["nome"] == nome), None)
+            if not ticker:
+                self._json_resp(404, {"erro": "activo desconhecido"})
+                return
+            with _MANUAL_LOCK:
+                carteira = carregar_carteira()
+                posicoes = carteira.get("posicoes_abertas", [])
+                idx = next((i for i, p in enumerate(posicoes)
+                            if p.get("activo") == nome and p.get("hora_abertura") == hora_a), None)
+                if idx is None:
+                    self._json_resp(404, {"erro": "posição não encontrada"})
+                    return
+                pos = posicoes[idx]
+                try:
+                    df = yf.download(ticker, period="5d", interval="1h",
+                                     progress=False, auto_adjust=True)
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
+                    preco_fecho = float(df["Close"].dropna().iloc[-1])
+                except Exception as e:
+                    self._json_resp(500, {"erro": f"erro ao obter preço: {e}"})
+                    return
+                contratos = pos["contratos"]
+                if pos["tipo"] == "COMPRAR":
+                    lucro_bruto = (preco_fecho - pos["preco_entrada"]) * contratos
+                else:
+                    lucro_bruto = (pos["preco_entrada"] - preco_fecho) * contratos
+                custo_fecho   = preco_fecho * contratos * CUSTO_OP
+                lucro_liquido = lucro_bruto - custo_fecho
+                resultado     = "GANHOU" if lucro_liquido >= 0 else "PERDEU"
+                try:
+                    hora_ab     = datetime.strptime(pos["hora_abertura"], "%Y-%m-%d %H:%M")
+                    duracao_min = int((datetime.now() - hora_ab).total_seconds() / 60)
+                except Exception:
+                    hora_ab     = None
+                    duracao_min = 0
+                minutos_ate_pico = None
+                if hora_ab and pos.get("hora_melhor_preco"):
+                    try:
+                        hora_pico        = datetime.strptime(pos["hora_melhor_preco"], "%Y-%m-%d %H:%M")
+                        minutos_ate_pico = int((hora_pico - hora_ab).total_seconds() / 60)
+                    except Exception:
+                        pass
+                carteira["saldo"]        += lucro_liquido
+                carteira["custos_totais"] = carteira.get("custos_totais", 0.0) + custo_fecho
+                carteira["historico"].append({
+                    "activo":             nome,
+                    "tipo":               pos["tipo"],
+                    "entrada":            pos["preco_entrada"],
+                    "saida":              round(preco_fecho, 4),
+                    "lucro_bruto":        round(lucro_bruto, 2),
+                    "custos":             round(pos.get("custo_entrada", 0) + custo_fecho, 4),
+                    "lucro_liquido":      round(lucro_liquido, 2),
+                    "lucro":              round(lucro_liquido, 2),
+                    "resultado":          resultado,
+                    "hora_abertura":      pos["hora_abertura"],
+                    "hora_fecho":         datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "hora":               datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "motivo_fecho":       "MANUAL",
+                    "duracao":            duracao_min,
+                    "score_entrada":      pos.get("score_entrada", 0),
+                    "raciocinio_entrada": pos.get("raciocinio_entrada", ""),
+                    "melhor_preco":       pos.get("melhor_preco"),
+                    "hora_melhor_preco":  pos.get("hora_melhor_preco"),
+                    "minutos_ate_pico":   minutos_ate_pico,
+                })
+                carteira["posicoes_abertas"].pop(idx)
+                atualizar_estatisticas(carteira)
+                guardar_carteira(carteira)
+                print(f"[MANUAL] FECHADA [{nome}] {pos['tipo']} @ {preco_fecho:.4f} | "
+                      f"Bruto:${lucro_bruto:.2f} Custos:${custo_fecho:.2f} "
+                      f"Líquido:${lucro_liquido:.2f}")
+            self._json_resp(200, {
+                "ok":            True,
+                "activo":        nome,
+                "preco_fecho":   round(preco_fecho, 4),
+                "lucro_liquido": round(lucro_liquido, 2),
+                "resultado":     resultado,
+            })
+
         def log_message(self, *_): pass
 
     http.server.HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

@@ -410,6 +410,57 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
 /* ── PRICE MONO ── */
 .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
 
+/* ── FECHO MANUAL ── */
+.btn-fechar-manual {
+  background: var(--red-dim);
+  border: 1px solid rgba(239,68,68,.4);
+  color: var(--red);
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; letter-spacing: .3px;
+  transition: all .18s ease;
+}
+.btn-fechar-manual:hover { background: rgba(239,68,68,.25); border-color: var(--red); }
+.btn-fechar-manual:disabled { opacity: .5; cursor: not-allowed; }
+.manual-warning {
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.35);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 12px; color: #f59e0b;
+  line-height: 1.6;
+}
+.manual-info-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px; margin-bottom: 4px;
+}
+.mi-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+.mi-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.btn-cancel-manual {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  border-radius: 8px; padding: 9px 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all .18s;
+}
+.btn-cancel-manual:hover { color: var(--text); border-color: var(--text); }
+.btn-confirm-manual {
+  background: var(--red-dim);
+  border: 1px solid rgba(239,68,68,.5);
+  color: var(--red);
+  border-radius: 8px; padding: 9px 22px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all .18s;
+  letter-spacing: .3px;
+}
+.btn-confirm-manual:hover { background: rgba(239,68,68,.25); }
+.btn-confirm-manual:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ── DETAIL PANEL ── */
 .ac-expand {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -783,6 +834,30 @@ tbody tr:hover td { background: rgba(59,130,246,.05); }
   </div>
 </div>
 
+<!-- MODAL FECHO MANUAL — fora do container -->
+<div id="manual-modal" class="modal-overlay">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-head">
+      <div>
+        <div style="font-size:16px;font-weight:700">Fechar Posição</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Confirmar fecho manual</div>
+      </div>
+      <button class="modal-close" id="manual-modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="gap:14px">
+      <div id="manual-modal-info"></div>
+      <div class="manual-warning">
+        ⚠ Fechos manuais por emoção tendem a cortar ganhos cedo. Tens a certeza?
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn-cancel-manual" id="manual-cancel-btn">Cancelar</button>
+        <button class="btn-confirm-manual" id="manual-confirm-btn">Confirmar fecho</button>
+      </div>
+      <div id="manual-modal-msg" style="font-size:12px;text-align:center;color:var(--muted);min-height:18px"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -802,6 +877,8 @@ let chartInst    = null;
 let activoFiltro = 'TODOS';
 let dadosGlobais = null;
 let ultimaAnalise = {};
+let _posCache = {};
+let _pendingClose = null;
 
 // ── RELÓGIO ───────────────────────────────────────────────────────────────────
 function tickClock() {
@@ -892,10 +969,12 @@ function renderCarteira(c) {
 function renderPositions(posicoes) {
   const grid = document.getElementById('pos-cards-grid');
   if (!grid) return;
+  _posCache = {};
   const fmt = v => typeof v === 'number' ? (v > 999 ? v.toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}) : v.toFixed(4)) : '—';
   const fmtP = v => typeof v === 'number' ? (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2) : '—';
 
   grid.innerHTML = posicoes.map((pos, i) => {
+      _posCache['p' + i] = pos;
     try {
       const isBuy = pos.tipo === 'COMPRAR';
       const cor   = ACTIVO_CORES[pos.activo] || 'var(--text)';
@@ -975,6 +1054,10 @@ function renderPositions(posicoes) {
               ${pos.score_entrada ? '<span style="font-size:12px;color:var(--muted)">Score entrada: <strong style="color:' + (pos.score_entrada >= 60 ? 'var(--green)' : 'var(--yellow)') + '">' + pos.score_entrada + '%</strong></span>' : ''}
             </div>
             ${pos.raciocinio_entrada ? '<div><div class="detail-stitle">Raciocínio IA na Entrada</div><div class="detail-rac">' + pos.raciocinio_entrada + '</div></div>' : ''}
+            <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <button class="btn-fechar-manual" onclick="event.stopPropagation();abrirFechoManual('${nid}')">⚠ Fechar Manualmente</button>
+              <span style="font-size:11px;color:var(--muted2)">Apenas com confirmação · irreversível</span>
+            </div>
           </div>
         </div>
       </div>`;
@@ -1063,6 +1146,109 @@ function renderHistModal(hist) {
     </div>`;
   }).join('');
 }
+
+// ── FECHO MANUAL ─────────────────────────────────────────────────────────────
+function abrirFechoManual(nid) {
+  const pos = _posCache[nid];
+  if (!pos) return;
+  _pendingClose = { activo: pos.activo, hora_abertura: pos.hora_abertura };
+
+  const isBuy  = pos.tipo === 'COMPRAR';
+  const cor    = ACTIVO_CORES[pos.activo] || 'var(--text)';
+  const pe     = pos.preco_entrada ?? 0;
+  const pa     = pos.preco_atual   ?? pe;
+  const pnlVal = pos.pnl_atual     ?? null;
+  const hasPnl = pnlVal != null;
+  const pnlCor = hasPnl ? (pnlVal >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
+  const pnlPct = (hasPnl && pe > 0) ? ((pa - pe) / pe * (isBuy ? 100 : -100)).toFixed(2) : null;
+
+  let durStr = '—';
+  try {
+    const ab   = new Date(String(pos.hora_abertura).replace(' ', 'T') + '+00:00');
+    const diff = (Date.now() - ab.getTime()) / 60000;
+    if (isFinite(diff) && diff >= 0) {
+      const h = Math.floor(diff / 60), m = Math.floor(diff % 60);
+      durStr  = h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+    }
+  } catch(e) {}
+
+  const fmtP = v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2);
+
+  document.getElementById('manual-modal-info').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:17px;font-weight:700;color:${cor}">${pos.activo || '—'}</span>
+      <span class="badge ${isBuy ? 'comprar' : 'vender'}">${pos.tipo || '—'}</span>
+    </div>
+    <div class="manual-info-grid">
+      <div><div class="mi-lbl">PnL Actual</div>
+        <div class="mi-val" style="color:${pnlCor}">
+          ${hasPnl ? fmtP(pnlVal) : '—'}
+          ${(hasPnl && pnlPct !== null) ? '<span style="font-size:12px;font-weight:500;margin-left:5px">(' + (pnlVal >= 0 ? '+' : '') + pnlPct + '%)</span>' : ''}
+        </div>
+      </div>
+      <div><div class="mi-lbl">Há quanto tempo</div><div class="mi-val" style="color:var(--muted)">${durStr}</div></div>
+      <div><div class="mi-lbl">Preço Entrada</div><div class="mi-val mono">${pe > 999 ? pe.toLocaleString('pt-PT',{minimumFractionDigits:2}) : pe.toFixed(4)}</div></div>
+      <div><div class="mi-lbl">Preço Actual</div><div class="mi-val mono" style="color:${pnlCor}">${hasPnl ? (pa > 999 ? pa.toLocaleString('pt-PT',{minimumFractionDigits:2}) : pa.toFixed(4)) : '—'}</div></div>
+    </div>`;
+
+  document.getElementById('manual-modal-msg').textContent = '';
+  const confirmBtn = document.getElementById('manual-confirm-btn');
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Confirmar fecho';
+
+  document.getElementById('manual-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharManualModal() {
+  document.getElementById('manual-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  _pendingClose = null;
+}
+
+async function confirmarFechoManual() {
+  if (!_pendingClose) return;
+  const confirmBtn = document.getElementById('manual-confirm-btn');
+  const msgEl      = document.getElementById('manual-modal-msg');
+  confirmBtn.disabled    = true;
+  confirmBtn.textContent = 'A fechar…';
+  msgEl.style.color      = 'var(--muted)';
+  msgEl.textContent      = 'A obter preço de mercado e fechar posição…';
+  try {
+    const res  = await fetch('/fechar_manual', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(_pendingClose),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msgEl.style.color = 'var(--green)';
+      msgEl.textContent = `✓ Fechada @ $${data.preco_fecho} · ${data.resultado === 'GANHOU' ? '+' : ''}$${data.lucro_liquido} · motivo: MANUAL`;
+      setTimeout(() => {
+        fecharManualModal();
+        carregar();
+      }, 1800);
+    } else {
+      msgEl.style.color      = 'var(--red)';
+      msgEl.textContent      = 'Erro: ' + (data.erro || 'resposta inesperada');
+      confirmBtn.disabled    = false;
+      confirmBtn.textContent = 'Confirmar fecho';
+    }
+  } catch(err) {
+    msgEl.style.color      = 'var(--red)';
+    msgEl.textContent      = 'Erro de rede: ' + err.message;
+    confirmBtn.disabled    = false;
+    confirmBtn.textContent = 'Confirmar fecho';
+  }
+}
+
+document.getElementById('manual-modal-close').addEventListener('click', fecharManualModal);
+document.getElementById('manual-cancel-btn').addEventListener('click', fecharManualModal);
+document.getElementById('manual-confirm-btn').addEventListener('click', confirmarFechoManual);
+document.addEventListener('click', e => {
+  const modal = document.getElementById('manual-modal');
+  if (modal && e.target === modal) fecharManualModal();
+});
 
 // ── RESUMO ACTIVOS (TODOS) ────────────────────────────────────────────────────
 function renderSumario(analises) {
